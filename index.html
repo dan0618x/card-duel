@@ -9,123 +9,326 @@
 //  CONFIG：所有數值都在這裡，改完重新整理頁面即可
 // =====================================================================
 const CONFIG = {
+  // ---------- 戰鬥 ----------
   energyPerTurn: 3,     // 每回合能量
-  handSize: 5,          // 開局抽幾張／每回合補到幾張
-  slots: 3,             // 每回合出牌格數
-  deckSize: 16,         // 自組牌庫的張數（必須剛好這麼多張）
-  maxCopies: 3,         // 每種卡最多放幾張
+  handSize: 5,          // 主角手牌：每回合補到幾張
+  slots: 3,             // 主角每回合出牌格數
+  supportHandSize: 4,   // 每位輔助角色的手牌：每回合補到幾張，每回合出 1 張
   baseCounter: 1,       // 防禦勝利的基本反擊傷害
   breakPenalty: 1,      // 破防：對手下一格威力減少多少
 
-  // 攻擊對攻擊的結算方式（開局畫面也可以切換）
+  // 攻擊對攻擊的結算方式（開始畫面也可以切換）
   //   'higher' 威力高者命中，造成自己的威力傷害
   //   'mutual' 互相傷害：雙方都命中，各自受到對方威力的傷害
   //   'diff'   高減低：威力高者命中，傷害 = 威力差
-  attackClash: 'mutual',
+  attackClash: 'higher',
 
+  // ---------- 牌組 ----------
+  deckSize: 16,         // 戰鬥牌組必須剛好幾張
+  maxCopies: 3,         // 每種卡最多幾張（戰鬥、輔助都一樣）
+  supportDeckMin: 4,    // 輔助牌組最少幾張
+  supportDeckMax: 10,   // 輔助牌組最多幾張
+
+  // ---------- 戰鬥卡 ----------
   // type: attack 攻擊 / defense 防禦 / skill 技巧 / dodge 閃避（不在三角相剋內）
-
   // combo: { cond: 'prevHit' 前格命中 | 'prevBlock' 前格擋下 | 'prevDodge' 前格閃避成功, bonus: 威力加成 }
   // counterOnWin: 防禦勝利時的反擊值（取代 baseCounter）
   // onWinNextAttackBonus: 勝利後自己下一格若為攻擊卡，威力加成
   // dodgeChance: 閃避成功率（0~1）；dodgeSkill: true 時對技巧也能擲骰閃避
   // breakOnWin: 技巧勝防禦時的破防值（取代 breakPenalty）
   cards: {
-    stab:   { name: '刺擊',   type: 'attack',  cost: 0, power: 2 },
-    heavy:  { name: '重擊',   type: 'attack',  cost: 2, power: 4 },
-    chase:  { name: '追擊',   type: 'attack',  cost: 1, power: 2, combo: { cond: 'prevHit', bonus: 3 } },
-    block:  { name: '格擋',   type: 'defense', cost: 0, power: 1 },
-    parry:  { name: '招架',   type: 'defense', cost: 1, power: 2, counterOnWin: 2 },
-    grab:   { name: '擒拿',   type: 'skill',   cost: 1, power: 2 },
-    dodge:  { name: '閃避',   type: 'dodge',   cost: 0, power: 0, dodgeChance: 0.5, dodgeSkill: true },
-    // 劍士專屬
-    slash:  { name: '連斬',   type: 'attack',  cost: 1, power: 1, combo: { cond: 'prevHit', bonus: 4 } },
-    mikiri: { name: '見切',   type: 'defense', cost: 1, power: 2, onWinNextAttackBonus: 2 },
-    // 鬥士專屬
-    throw:  { name: '摔投',   type: 'skill',   cost: 2, power: 4 },
-    tetsu:  { name: '鐵山靠', type: 'skill',   cost: 1, power: 2, combo: { cond: 'prevBlock', bonus: 3 } },
-    // 刺客專屬
-    shadow: { name: '影襲',   type: 'attack',  cost: 1, power: 2, combo: { cond: 'prevDodge', bonus: 4 } },
-    phantom:{ name: '幻步',   type: 'dodge',   cost: 1, power: 0, dodgeChance: 0.75, dodgeSkill: true },
-    // 騎士專屬
-    bash:   { name: '盾擊',   type: 'defense', cost: 1, power: 2, counterOnWin: 3 },
-    charge: { name: '衝鋒',   type: 'attack',  cost: 2, power: 3, combo: { cond: 'prevBlock', bonus: 3 } },
-    // 武僧專屬
-    pressure:{ name: '點穴',  type: 'skill',   cost: 1, power: 1, breakOnWin: 2 },
-    palm:   { name: '連環掌', type: 'skill',   cost: 1, power: 1, combo: { cond: 'prevHit', bonus: 3 } },
+    stab:     { name: '刺擊',   type: 'attack',  cost: 0, power: 2 },
+    heavy:    { name: '重擊',   type: 'attack',  cost: 2, power: 4 },
+    chase:    { name: '追擊',   type: 'attack',  cost: 1, power: 2, combo: { cond: 'prevHit', bonus: 3 } },
+    block:    { name: '格擋',   type: 'defense', cost: 0, power: 1 },
+    parry:    { name: '招架',   type: 'defense', cost: 1, power: 2, counterOnWin: 2 },
+    grab:     { name: '擒拿',   type: 'skill',   cost: 1, power: 2 },
+    dodge:    { name: '閃避',   type: 'dodge',   cost: 0, power: 0, dodgeChance: 0.5, dodgeSkill: true },
+    // 角色專屬
+    slash:    { name: '連斬',   type: 'attack',  cost: 1, power: 1, combo: { cond: 'prevHit', bonus: 4 } },
+    mikiri:   { name: '見切',   type: 'defense', cost: 1, power: 2, onWinNextAttackBonus: 2 },
+    throw:    { name: '摔投',   type: 'skill',   cost: 2, power: 4 },
+    tetsu:    { name: '鐵山靠', type: 'skill',   cost: 1, power: 2, combo: { cond: 'prevBlock', bonus: 3 } },
+    shadow:   { name: '影襲',   type: 'attack',  cost: 1, power: 2, combo: { cond: 'prevDodge', bonus: 4 } },
+    phantom:  { name: '幻步',   type: 'dodge',   cost: 1, power: 0, dodgeChance: 0.75, dodgeSkill: true },
+    bash:     { name: '盾擊',   type: 'defense', cost: 1, power: 2, counterOnWin: 3 },
+    charge:   { name: '衝鋒',   type: 'attack',  cost: 2, power: 3, combo: { cond: 'prevBlock', bonus: 3 } },
+    pressure: { name: '點穴',   type: 'skill',   cost: 1, power: 1, breakOnWin: 2 },
+    palm:     { name: '連環掌', type: 'skill',   cost: 1, power: 1, combo: { cond: 'prevHit', bonus: 3 } },
+    thrust:   { name: '突刺',   type: 'attack',  cost: 1, power: 3 },
+    whirl:    { name: '迴旋槍', type: 'skill',   cost: 2, power: 3, combo: { cond: 'prevHit', bonus: 3 } },
+    rapid:    { name: '速射',   type: 'attack',  cost: 0, power: 1, combo: { cond: 'prevHit', bonus: 2 } },
+    pin:      { name: '牽制',   type: 'skill',   cost: 1, power: 2, breakOnWin: 2 },
+    rage:     { name: '狂斬',   type: 'attack',  cost: 2, power: 5 },
+    bloodlust:{ name: '血怒',   type: 'attack',  cost: 1, power: 1, combo: { cond: 'prevHit', bonus: 5 } },
+    swirl:    { name: '旋舞',   type: 'dodge',   cost: 0, power: 0, dodgeChance: 0.6, dodgeSkill: true },
+    fan:      { name: '舞扇',   type: 'skill',   cost: 1, power: 2, combo: { cond: 'prevDodge', bonus: 3 } },
+    // 怪物用
+    slam:     { name: '撞擊',   type: 'attack',  cost: 0, power: 2 },
+    bite:     { name: '撕咬',   type: 'attack',  cost: 1, power: 2, combo: { cond: 'prevHit', bonus: 3 } },
+    claw:     { name: '利爪',   type: 'attack',  cost: 1, power: 3 },
+    smash:    { name: '粉碎',   type: 'attack',  cost: 2, power: 5 },
+    shell:    { name: '硬殼',   type: 'defense', cost: 0, power: 2 },
+    guard:    { name: '鐵壁',   type: 'defense', cost: 1, power: 3, counterOnWin: 2 },
+    spore:    { name: '孢子',   type: 'skill',   cost: 1, power: 2, breakOnWin: 2 },
+    curse:    { name: '詛咒',   type: 'skill',   cost: 1, power: 3 },
+    roar:     { name: '咆哮',   type: 'skill',   cost: 2, power: 4 },
+    hellfire: { name: '地獄火', type: 'skill',   cost: 2, power: 5 },
+    wing:     { name: '振翅',   type: 'dodge',   cost: 0, power: 0, dodgeChance: 0.5, dodgeSkill: false },
   },
-  // 所有角色都能放的通用卡
   commonCards: ['stab', 'heavy', 'chase', 'block', 'parry', 'grab', 'dodge'],
 
-  // 角色只有屬性差別（HP、速度），另外各有 2 張專屬卡可以放進牌庫
-  // defaultDeck：沒自訂時用的牌組（對手 AI 也用這組，除非在開局畫面幫它改）
-  characters: {
-    swordsman: { name: '劍士', hp: 20, speed: 3, cards: ['slash', 'mikiri'],
-                 defaultDeck: { stab: 2, heavy: 2, chase: 2, block: 2, parry: 2, grab: 2, slash: 2, mikiri: 2 } },
-    fighter:   { name: '鬥士', hp: 24, speed: 1, cards: ['throw', 'tetsu'],
-                 defaultDeck: { stab: 2, heavy: 2, chase: 2, block: 2, parry: 2, grab: 2, throw: 2, tetsu: 2 } },
-    assassin:  { name: '刺客', hp: 17, speed: 5, cards: ['shadow', 'phantom'],
-                 defaultDeck: { stab: 3, chase: 2, block: 2, grab: 2, dodge: 3, shadow: 2, phantom: 2 } },
-    knight:    { name: '騎士', hp: 26, speed: 2, cards: ['bash', 'charge'],
-                 defaultDeck: { stab: 2, heavy: 2, block: 3, parry: 2, grab: 2, bash: 3, charge: 2 } },
-    monk:      { name: '武僧', hp: 22, speed: 4, cards: ['pressure', 'palm'],
-                 defaultDeck: { stab: 2, chase: 2, block: 2, parry: 2, grab: 3, pressure: 2, palm: 3 } },
+  // ---------- 輔助卡 ----------
+  // 輔助卡在每回合翻牌前先掀開，效果只持續本回合（回復、直接傷害是立即的）
+  // 效果欄位：heal 回復 / shield 護盾 / dmg 直接傷害 / selfDmg 自傷 / weaken 敵方全部威力−
+  //           powAll 全部威力+ / powAtk 攻擊卡+ / powSkl 技巧卡+ / powDef 防禦卡+ / slot1 第1格+
+  //           counter 反擊+ / dodge 閃避率+（百分比）
+  supportCards: {
+    s_heal:   { name: '治療術', mods: { heal: 3 } },
+    s_shield: { name: '護盾',   mods: { shield: 4 } },
+    s_rally:  { name: '激勵',   mods: { powAll: 1 } },
+    s_stone:  { name: '投石',   mods: { dmg: 2 } },
+    s_weaken: { name: '削弱',   mods: { weaken: 1 } },
+    s_focus:  { name: '專注',   mods: { slot1: 3 } },
+    sw_aura:  { name: '劍氣',   mods: { dmg: 3 } },
+    sw_eye:   { name: '心眼',   mods: { powAtk: 2 } },
+    fi_wall:  { name: '不動',   mods: { shield: 6 } },
+    fi_spirit:{ name: '戰意',   mods: { counter: 2 } },
+    as_smoke: { name: '煙霧',   mods: { dodge: 30 } },
+    as_poison:{ name: '毒刃',   mods: { dmg: 2, weaken: 1 } },
+    kn_guard: { name: '守護',   mods: { shield: 5 } },
+    kn_order: { name: '號令',   mods: { powAll: 1, counter: 1 } },
+    mo_breath:{ name: '調息',   mods: { heal: 5 } },
+    mo_qi:    { name: '氣功',   mods: { powSkl: 2 } },
+    la_spear: { name: '投槍',   mods: { dmg: 4 } },
+    la_brace: { name: '架槍',   mods: { powDef: 2, counter: 1 } },
+    ar_rain:  { name: '箭雨',   mods: { dmg: 3 } },
+    ar_aim:   { name: '瞄準',   mods: { slot1: 4 } },
+    be_blood: { name: '嗜血',   mods: { powAll: 2, selfDmg: 2 } },
+    be_shout: { name: '戰吼',   mods: { weaken: 2 } },
+    da_cheer: { name: '鼓舞',   mods: { heal: 2, powAll: 1 } },
+    da_mirage:{ name: '幻舞',   mods: { dodge: 25, powSkl: 1 } },
   },
+  commonSupport: ['s_heal', 's_shield', 's_rally', 's_stone', 's_weaken', 's_focus'],
+
+  // ---------- 角色池（9 位） ----------
+  // 角色只有 HP、速度的差別；cards＝2 張專屬戰鬥卡，support＝2 張專屬輔助卡
+  characters: {
+    swordsman: { name: '劍士',   hp: 20, speed: 3, cards: ['slash', 'mikiri'],    support: ['sw_aura', 'sw_eye'],
+                 defaultDeck: { stab: 2, heavy: 2, chase: 2, block: 2, parry: 2, grab: 2, slash: 2, mikiri: 2 } },
+    fighter:   { name: '鬥士',   hp: 24, speed: 1, cards: ['throw', 'tetsu'],     support: ['fi_wall', 'fi_spirit'],
+                 defaultDeck: { stab: 2, heavy: 2, chase: 2, block: 2, parry: 2, grab: 2, throw: 2, tetsu: 2 } },
+    assassin:  { name: '刺客',   hp: 17, speed: 5, cards: ['shadow', 'phantom'],  support: ['as_smoke', 'as_poison'],
+                 defaultDeck: { stab: 3, chase: 2, block: 2, grab: 2, dodge: 3, shadow: 2, phantom: 2 } },
+    knight:    { name: '騎士',   hp: 26, speed: 2, cards: ['bash', 'charge'],     support: ['kn_guard', 'kn_order'],
+                 defaultDeck: { stab: 2, heavy: 2, block: 3, parry: 2, grab: 2, bash: 3, charge: 2 } },
+    monk:      { name: '武僧',   hp: 22, speed: 4, cards: ['pressure', 'palm'],   support: ['mo_breath', 'mo_qi'],
+                 defaultDeck: { stab: 2, chase: 2, block: 2, parry: 2, grab: 3, pressure: 2, palm: 3 } },
+    lancer:    { name: '槍兵',   hp: 21, speed: 3, cards: ['thrust', 'whirl'],    support: ['la_spear', 'la_brace'],
+                 defaultDeck: { stab: 2, heavy: 2, chase: 2, block: 2, parry: 2, grab: 2, thrust: 2, whirl: 2 } },
+    archer:    { name: '弓手',   hp: 18, speed: 4, cards: ['rapid', 'pin'],       support: ['ar_rain', 'ar_aim'],
+                 defaultDeck: { stab: 2, chase: 2, block: 2, parry: 2, grab: 2, dodge: 2, rapid: 2, pin: 2 } },
+    berserker: { name: '狂戰士', hp: 25, speed: 2, cards: ['rage', 'bloodlust'],  support: ['be_blood', 'be_shout'],
+                 defaultDeck: { stab: 2, heavy: 2, chase: 2, block: 2, parry: 2, grab: 2, rage: 2, bloodlust: 2 } },
+    dancer:    { name: '舞者',   hp: 19, speed: 5, cards: ['swirl', 'fan'],       support: ['da_cheer', 'da_mirage'],
+                 defaultDeck: { stab: 2, chase: 2, block: 2, parry: 2, grab: 2, dodge: 2, swirl: 2, fan: 2 } },
+  },
+  // 沒自訂輔助牌組時：2 張專屬各 2 張 + 這些通用輔助卡
+  defaultSupportCommon: { s_heal: 2, s_shield: 2, s_rally: 1, s_stone: 1 },
+
+  // ---------- 怪物（12 種 + 3 王） ----------
+  // traits：armor 受到傷害−N / regen 每回合結束回復 N / thorns 被命中時反彈 N / enrage 每回合威力+N（累加）
+  monsters: {
+    slime:    { name: '史萊姆',   icon: '🟢', hp: 14, speed: 1, deck: { slam: 3, shell: 3, grab: 2, block: 2 }, traits: { regen: 1 } },
+    wolf:     { name: '野狼',     icon: '🐺', hp: 12, speed: 4, deck: { bite: 3, stab: 3, claw: 2, block: 2 } },
+    goblin:   { name: '哥布林',   icon: '👺', hp: 15, speed: 3, deck: { stab: 2, heavy: 1, block: 2, grab: 2, chase: 2, parry: 1 } },
+    shroom:   { name: '毒菇',     icon: '🍄', hp: 13, speed: 2, deck: { spore: 3, grab: 2, block: 3, slam: 2 }, traits: { thorns: 1 } },
+    treant:   { name: '樹精王',   icon: '🌳', hp: 45, speed: 2, deck: { slam: 2, smash: 2, shell: 3, guard: 2, spore: 2, roar: 1 }, traits: { armor: 1, regen: 2 } },
+    skeleton: { name: '骷髏兵',   icon: '💀', hp: 18, speed: 2, deck: { stab: 2, heavy: 2, shell: 2, parry: 2, grab: 2 }, traits: { armor: 1 } },
+    bat:      { name: '蝙蝠群',   icon: '🦇', hp: 14, speed: 5, deck: { bite: 3, wing: 3, stab: 2, grab: 2 } },
+    golem:    { name: '石像',     icon: '🗿', hp: 24, speed: 0, deck: { shell: 3, guard: 3, smash: 2, slam: 2 } },
+    shaman:   { name: '暗影法師', icon: '🧙', hp: 16, speed: 3, deck: { curse: 3, spore: 2, grab: 2, block: 2, wing: 1 } },
+    bonelord: { name: '骸骨將軍', icon: '☠️', hp: 70, speed: 2, deck: { smash: 2, claw: 2, guard: 2, shell: 2, curse: 2, chase: 2 }, traits: { enrage: 1, armor: 1 } },
+    dknight:  { name: '惡魔騎士', icon: '😈', hp: 26, speed: 3, deck: { claw: 2, smash: 2, guard: 2, parry: 2, grab: 2 } },
+    succubus: { name: '魅魔',     icon: '💋', hp: 22, speed: 5, deck: { wing: 3, curse: 3, bite: 2, stab: 2 } },
+    hellhound:{ name: '地獄犬',   icon: '🐕', hp: 24, speed: 4, deck: { bite: 3, claw: 3, roar: 2, block: 2 }, traits: { thorns: 1 } },
+    dgolem:   { name: '魔像',     icon: '🪨', hp: 32, speed: 1, deck: { guard: 3, shell: 3, smash: 2, hellfire: 2 }, traits: { armor: 2 } },
+    demonlord:{ name: '魔王',     icon: '👿', hp: 100, speed: 3, deck: { hellfire: 2, smash: 2, claw: 2, guard: 2, curse: 2, wing: 2 }, traits: { enrage: 1, regen: 2 } },
+  },
+
+  // ---------- 地圖 ----------
+  // powBonus：這張地圖所有怪物威力加成（跨地圖的明顯變強）
+  maps: [
+    { name: '幽暗森林', monsters: ['slime', 'wolf', 'goblin', 'shroom'],          boss: 'treant',    powBonus: 0 },
+    { name: '亡者洞窟', monsters: ['skeleton', 'bat', 'golem', 'shaman'],         boss: 'bonelord',  powBonus: 1 },
+    { name: '魔王城',   monsters: ['dknight', 'succubus', 'hellhound', 'dgolem'], boss: 'demonlord', powBonus: 2 },
+  ],
+  scaling: {
+    hpPerStep: 0.05,    // 同地圖每往後一步，怪物 HP +5%
+    powEverySteps: 4,   // 同地圖每往後幾步，怪物威力 +1
+    eliteHp: 1.4,       // 精英：HP 倍率
+    elitePow: 1,        // 精英：威力加成
+  },
+  mapGen: {
+    lanes: 3,           // 路線數
+    steps: 10,          // 每張地圖幾步（最後一步是王）
+    crossChance: 0.4,   // 相鄰路線之間有連線的機率（每一步、每一對路線）
+    // 第 1 步全是怪；王前一步固定是休息點；中間各種點的數量（剩下的都是怪）
+    nodes: { heal: 2, buff: 2, swap: 1, treasure: 2, event: 2, elite: 2 },
+    beforeBoss: ['heal', 'buff', 'heal'],
+  },
+  healPct: 0.3,         // 回血點：全隊回復最大 HP 的比例
+  mapClearHeal: 0.3,    // 打完王：全隊回復比例
+  buffBattles: 3,       // 祝福持續幾場戰鬥
+
+  // ---------- 成長：裝備（全隊共用）、角色提升、祝福 ----------
+  // 效果欄位：powAll/powAtk/powSkl/powDef/slot1/counter/dodge 同上，另外：
+  //   armor 受到傷害−N / lifesteal 命中時回復 N / thorns 被命中反彈 N / comboDmg 連擊加傷
+  //   lowHpPow HP≤50% 時全部威力+ / energy1 第1回合能量+ / killHeal 擊敗敵人後回復
+  //   maxHp 最大HP+ / speed 速度+ / regen 每回合結束回復
+  equipment: {
+    whetstone: { name: '磨刀石',     icon: '🗡️', mods: { powAtk: 1 } },
+    tome:      { name: '秘傳書',     icon: '📕', mods: { powSkl: 1 } },
+    gauntlet:  { name: '鐵護手',     icon: '🧤', mods: { counter: 1 } },
+    charm:     { name: '連擊護符',   icon: '📿', mods: { comboDmg: 1 } },
+    fang:      { name: '吸血牙',     icon: '🦷', mods: { lifesteal: 1 } },
+    drum:      { name: '戰鼓',       icon: '🥁', mods: { energy1: 1 } },
+    hawkeye:   { name: '鷹眼',       icon: '🦅', mods: { dodge: 15 } },
+    plate:     { name: '厚甲',       icon: '🛡️', mods: { armor: 1 } },
+    bloodvial: { name: '狂血瓶',     icon: '🩸', mods: { lowHpPow: 2 } },
+    banner:    { name: '先鋒旗',     icon: '🚩', mods: { slot1: 2 } },
+    scythe:    { name: '收割鐮',     icon: '🌙', mods: { killHeal: 4 } },
+    thornmail: { name: '荊棘甲',     icon: '🌵', mods: { thorns: 1 } },
+    gem:       { name: '生命寶石',   icon: '💎', mods: { maxHp: 5 } },
+    ring:      { name: '再生指環',   icon: '💍', mods: { regen: 1 } },
+  },
+  // 普通戰鬥勝利：三選一，加在「主角」身上（永久）
+  upgrades: {
+    up_hp:   { name: '鍛鍊體魄', mods: { maxHp: 4 } },
+    up_spd:  { name: '身法',     mods: { speed: 1 } },
+    up_atk:  { name: '刀法精進', mods: { powAtk: 1 } },
+    up_skl:  { name: '技巧精進', mods: { powSkl: 1 } },
+    up_def:  { name: '守勢精進', mods: { powDef: 1, counter: 1 } },
+    up_dge:  { name: '輕功',     mods: { dodge: 10 } },
+    up_cmb:  { name: '連擊心得', mods: { comboDmg: 1 } },
+    up_s1:   { name: '先發制人', mods: { slot1: 2 } },
+  },
+  // 祝福點：三選一，持續 buffBattles 場戰鬥
+  buffs: {
+    b_power: { name: '戰神祝福', mods: { powAll: 1 } },
+    b_stone: { name: '石膚',     mods: { armor: 2 } },
+    b_wind:  { name: '疾風',     mods: { dodge: 20, speed: 2 } },
+    b_combo: { name: '戰意高昂', mods: { comboDmg: 2 } },
+    b_light: { name: '聖光',     mods: { regen: 2 } },
+    b_first: { name: '先手',     mods: { slot1: 3 } },
+  },
+  // 事件點：隨機一個事件，兩個選項
+  // 選項效果：healPct 全隊回復比例 / loseHp 主角失去 HP / maxHp 主角最大 HP+ / equip 獲得 N 件隨機裝備
+  //           upgrade 主角獲得 N 個隨機提升 / buff 獲得 N 個隨機祝福
+  events: [
+    { title: '神秘泉水', text: '清澈的泉水閃著微光。', options: [
+      { label: '喝下去：全隊回復 30% HP', effects: { healPct: 0.3 } },
+      { label: '浸泡全身：主角最大 HP +4', effects: { maxHp: 4 } } ] },
+    { title: '賭徒', text: '一個老人搖著骰盅：「拿點血來賭一把？」', options: [
+      { label: '割血下注：失去 6 HP，獲得 1 件隨機裝備', effects: { loseHp: 6, equip: 1 } },
+      { label: '不賭，離開', effects: {} } ] },
+    { title: '訓練場', text: '一座廢棄的訓練場，木人樁還能用。', options: [
+      { label: '苦練：失去 3 HP，主角獲得 1 個隨機提升', effects: { loseHp: 3, upgrade: 1 } },
+      { label: '休息：全隊回復 15% HP', effects: { healPct: 0.15 } } ] },
+    { title: '流浪祭司', text: '祭司願意為你們祈福。', options: [
+      { label: '接受祈福：獲得 1 個隨機祝福', effects: { buff: 1 } },
+      { label: '請他治療：全隊回復 20% HP', effects: { healPct: 0.2 } } ] },
+  ],
 
   ai: {
-    comboWeight: 2,     // 排序權重 = 1 + comboWeight × 該排序中的組合銜接數；0 = 完全隨機
+    comboWeight: 2,     // 怪物排序權重 = 1 + comboWeight × 組合銜接數；0 = 完全隨機
   },
-
   ui: {
-    flipDelay: 700,     // 翻牌後到結算的停頓（毫秒）
-    slotDelay: 1100,    // 每格結算後到下一格的停頓（毫秒）
+    flipDelay: 650,     // 翻牌後到結算的停頓（毫秒）
+    slotDelay: 1000,    // 每格結算後到下一格的停頓（毫秒）
+    supportDelay: 700,  // 每張輔助卡掀開的停頓（毫秒）
     fastFactor: 0.25,   // 「快速」模式的時間倍率
+    bigHit: 5,          // 傷害達到多少會震動畫面
   },
 };
 </script>
 <style>
   :root {
     --bg: #14161c; --panel: #1f232c; --panel2: #2a2f3a; --text: #e8e8ec; --muted: #9aa0ac;
-    --atk: #e0564f; --def: #4b8fe0; --skl: #3fb67a; --dge: #b07ce8; --gold: #f0c04a; --hp: #4fc36b;
+    --atk: #e0564f; --def: #4b8fe0; --skl: #3fb67a; --dge: #b07ce8; --sup: #36c3c3; --gold: #f0c04a; --hp: #4fc36b;
   }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body { margin: 0; background: var(--bg); color: var(--text);
     font-family: -apple-system, "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", sans-serif; font-size: 14px; }
   button { font: inherit; color: inherit; border: 0; cursor: pointer; }
   #app { max-width: 480px; margin: 0 auto; padding: 8px 10px 40px; }
+  #app { padding-left: max(10px, env(safe-area-inset-left)); padding-right: max(10px, env(safe-area-inset-right)); padding-bottom: max(40px, env(safe-area-inset-bottom)); }
   .hidden { display: none !important; }
-
-  /* ---------- 角色選擇 ---------- */
   h1 { font-size: 20px; margin: 8px 0 4px; }
   h2 { font-size: 15px; margin: 16px 0 8px; color: var(--muted); font-weight: 600; }
-  .charlist { display: grid; gap: 8px; }
-  .charopt { background: var(--panel); border: 2px solid transparent; border-radius: 10px; padding: 10px; text-align: left; width: 100%; }
-  .charopt.sel { border-color: var(--gold); }
-  .charopt .cn { font-size: 16px; font-weight: 700; }
-  .charopt .cs { color: var(--muted); font-size: 12px; margin: 2px 0 6px; }
-  .charopt .cc { font-size: 12px; line-height: 1.6; }
+  .muted { color: var(--muted); }
   .bigbtn { width: 100%; padding: 14px; border-radius: 10px; background: var(--gold); color: #222; font-weight: 700; font-size: 16px; margin-top: 16px; }
-  .bigbtn:disabled { background: #555; color: #999; }
-
-  /* ---------- 遊戲 ---------- */
-  .topbar { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
-  .topbar .turn { font-weight: 700; flex: 1; }
   .sbtn { background: var(--panel2); padding: 6px 9px; border-radius: 7px; font-size: 12px; }
+  .topbar { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+  .topbar .turn { font-weight: 700; flex: 1; font-size: 13px; }
 
-  /* 戰場：左＝我方出牌、中＝雙方角色（HP 在頭上）、右＝敵方出牌 */
-  .arena { display: grid; grid-template-columns: minmax(0,1fr) 62px 62px minmax(0,1fr); grid-template-rows: auto repeat(3, minmax(80px, auto)); gap: 6px; margin: 8px 0; }
+  /* ---------- 標題畫面 ---------- */
+  .charlist { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .charopt { background: var(--panel); border: 2px solid transparent; border-radius: 10px; padding: 8px 4px; text-align: center; width: 100%; }
+  .charopt.sel { border-color: var(--gold); }
+  .charopt .cn { font-size: 15px; font-weight: 700; }
+  .charopt .cs { color: var(--muted); font-size: 11px; margin-top: 2px; }
+  .chardetail { background: var(--panel); border-radius: 10px; padding: 8px 10px; margin-top: 8px; font-size: 12px; line-height: 1.6; }
+  .optrow { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+  .optrow .lbl { width: 100%; font-size: 12px; color: var(--muted); }
+  .optrow button { flex: 1; background: var(--panel); border: 2px solid transparent; border-radius: 8px; padding: 8px 4px; font-size: 13px; }
+  .optrow button.sel { border-color: var(--gold); }
+  .decklist { display: grid; gap: 4px; }
+  .deckline { display: flex; align-items: center; gap: 6px; background: var(--panel); border-radius: 8px; padding: 6px 8px; font-size: 12px; }
+  .deckline b { width: 52px; }
+  .deckline .tag { flex: 1; color: var(--muted); }
+
+  /* ---------- 地圖 ---------- */
+  .party { display: grid; gap: 4px; margin: 6px 0; }
+  .pm { display: flex; align-items: center; gap: 8px; background: var(--panel); border-radius: 8px; padding: 6px 8px; font-size: 12px; }
+  .pm .role { font-size: 10px; padding: 1px 5px; border-radius: 4px; background: var(--panel2); }
+  .pm .role.main { background: #f5c242; color: #222; font-weight: 700; }
+  .pm .nm { font-weight: 700; width: 48px; }
+  .pm .bar { flex: 1; }
+  .gear { display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 0; font-size: 12px; }
+  .gear .chip { background: var(--panel2); border-radius: 6px; padding: 3px 7px; }
+  .gear .chip.buff { border: 1px solid var(--sup); }
+  #mapSvg { width: 100%; display: block; background: #191c23; border-radius: 12px; margin-top: 6px; }
+  #mapSvg .node.avail { cursor: pointer; }
+  #mapSvg .node.avail circle { stroke: var(--gold); stroke-width: 3; animation: pulse 1.2s infinite; }
+  @keyframes pulse { 50% { stroke-opacity: .3; } }
+  .legend { font-size: 11px; color: var(--muted); margin-top: 6px; line-height: 1.7; }
+
+  /* ---------- 戰場 ---------- */
+  #arenaWrap { position: relative; }
+  #arenaWrap.shake1 { animation: shake1 .35s; } #arenaWrap.shake2 { animation: shake2 .5s; }
+  @keyframes shake1 { 20% { transform: translate(-4px, 2px); } 40% { transform: translate(4px, -2px); } 60% { transform: translate(-3px, 1px); } 80% { transform: translate(2px, -1px); } }
+  @keyframes shake2 { 15% { transform: translate(-9px, 4px) rotate(-1deg); } 30% { transform: translate(8px, -4px) rotate(1deg); } 45% { transform: translate(-7px, 3px); } 60% { transform: translate(6px, -2px); } 80% { transform: translate(-3px, 1px); } }
+  #fx { position: absolute; inset: 0; pointer-events: none; z-index: 5; }
+  .float { position: absolute; transform: translate(-50%, -50%); font-weight: 900; white-space: nowrap; text-shadow: 0 2px 0 #000, 0 0 8px #000; animation: floatUp 1.1s ease-out forwards; }
+  .float.dmg { color: #ff6b5e; } .float.heal { color: #6bff8a; } .float.info { color: var(--gold); } .float.shield { color: #8fd3ff; }
+  @keyframes floatUp { 0% { opacity: 0; transform: translate(-50%, -20%) scale(.5); } 15% { opacity: 1; transform: translate(-50%, -60%) scale(1.25); } 30% { transform: translate(-50%, -70%) scale(1); } 100% { opacity: 0; transform: translate(-50%, -170%) scale(1); } }
+  .arena { display: grid; grid-template-columns: minmax(0,1fr) 62px 62px minmax(0,1fr); grid-template-rows: auto repeat(3, minmax(80px, auto)); gap: 6px; margin: 8px 0 4px; }
   .colhdr { font-size: 11px; color: var(--muted); align-self: end; text-align: center; line-height: 1.3; }
   .colhdr b { color: var(--text); }
   .hpbox { grid-row: 1; align-self: end; font-size: 11px; text-align: center; font-weight: 700; }
   .hpwrap { position: relative; height: 8px; margin-top: 2px; background: #333; border-radius: 4px; overflow: hidden; }
   .hpfill { height: 100%; background: var(--hp); transition: width .4s; }
   .hpfill.low { background: var(--atk); }
-  .fighter { grid-row: 2 / span 3; border-radius: 12px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; color: #222; font-weight: 800; cursor: pointer; }
+  .fighter { position: relative; grid-row: 2 / span 3; border-radius: 12px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; color: #222; font-weight: 800; cursor: pointer; text-align: center; padding: 2px; }
   .fighter.me { grid-column: 2; background: #f5c242; } .fighter.op { grid-column: 3; background: #f0457f; }
-  .fighter .glyph { font-size: 30px; line-height: 1; } .fighter .fn { font-size: 11px; }
+  .fighter .glyph { font-size: 30px; line-height: 1; } .fighter .fn { font-size: 11px; } .fighter .tr { font-size: 9.5px; font-weight: 600; }
   .fighter.dead { filter: grayscale(1) brightness(.6); }
   .fighter.flash { animation: hurt .5s; }
   @keyframes hurt { 25% { filter: brightness(1.9); transform: translateX(-4px); } 60% { transform: translateX(4px); } }
+  .combo { position: absolute; top: 4px; left: 50%; transform: translateX(-50%); background: #1b1b1b; color: var(--gold); border-radius: 8px; padding: 2px 5px; font-weight: 900; white-space: nowrap; z-index: 3; box-shadow: 0 0 10px #f0c04a88; }
+  .combo.pop { animation: comboPop .45s; }
+  @keyframes comboPop { 0% { transform: translateX(-50%) scale(.6); } 50% { transform: translateX(-50%) scale(1.5); } 100% { transform: translateX(-50%) scale(1); } }
   .slot { display: flex; min-width: 0; } .slot > .card { flex: 1; min-width: 0; }
   .slot.active > .card { outline: 2px solid var(--gold); outline-offset: 1px; }
   .badge { min-height: 34px; display: flex; align-items: center; justify-content: center; text-align: center; font-size: 11px; font-weight: 700; border-radius: 6px; padding: 3px 2px; line-height: 1.25; }
@@ -133,32 +336,13 @@ const CONFIG = {
   .badge.win0 { background: #2b4a33; } .badge.win1 { background: #5a2b2b; } .badge.none { background: #2a2d35; color: var(--muted); } .badge.mutual { background: #4b3a63; }
   .energy { font-size: 12px; color: var(--muted); text-align: center; }
   .energy b { color: var(--gold); letter-spacing: 2px; }
-  .optrow { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
-  .optrow .lbl { width: 100%; font-size: 12px; color: var(--muted); }
-  .optrow button { flex: 1; background: var(--panel); border: 2px solid transparent; border-radius: 8px; padding: 8px 4px; font-size: 13px; }
-  .optrow button.sel { border-color: var(--gold); }
-  .charlist { grid-template-columns: repeat(3, 1fr); }
-  .charopt { padding: 8px 6px; text-align: center; }
-  .charopt .cs { margin: 2px 0 0; }
-  .chardetail { background: var(--panel); border-radius: 10px; padding: 8px 10px; margin-top: 8px; font-size: 12px; line-height: 1.6; }
-  .deckrow { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
-  .deckrow .dinfo { flex: 1; font-size: 12px; color: var(--muted); }
-  .deckrow .dinfo b { color: var(--text); }
-  .deckrow .bad { color: var(--atk); }
-  .dbrow { display: flex; align-items: center; gap: 6px; padding: 6px 0; border-bottom: 1px solid #333; }
-  .dbrow .dl { flex: 1; font-size: 12.5px; line-height: 1.35; }
-  .dbrow .dl small { color: var(--muted); }
-  .dbrow .ex { font-size: 10px; color: var(--gold); border: 1px solid var(--gold); border-radius: 4px; padding: 0 3px; margin-left: 3px; }
-  .dbrow button { width: 34px; height: 34px; border-radius: 8px; background: var(--panel2); font-size: 18px; font-weight: 700; }
-  .dbrow button:disabled { opacity: .3; }
-  .dbrow .n { width: 22px; text-align: center; font-weight: 800; font-size: 16px; }
-  .dbsum { position: sticky; top: -14px; background: var(--panel); padding: 6px 0; font-size: 13px; z-index: 1; border-bottom: 1px solid #444; }
+
   .card { position: relative; border-radius: 8px; padding: 4px 5px; background: var(--panel2); border-top: 4px solid #666; min-height: 82px; display: flex; flex-direction: column; text-align: left; width: 100%; }
-  .card.attack { border-top-color: var(--atk); } .card.defense { border-top-color: var(--def); } .card.skill { border-top-color: var(--skl); } .card.dodge { border-top-color: var(--dge); }
+  .card.attack { border-top-color: var(--atk); } .card.defense { border-top-color: var(--def); } .card.skill { border-top-color: var(--skl); } .card.dodge { border-top-color: var(--dge); } .card.support { border-top-color: var(--sup); }
   .card .ctop { display: flex; justify-content: space-between; font-size: 10px; }
   .card .cost { background: var(--gold); color: #222; border-radius: 50%; width: 16px; height: 16px; text-align: center; line-height: 16px; font-weight: 700; }
   .card .ty { font-weight: 700; }
-  .card.attack .ty { color: var(--atk); } .card.defense .ty { color: var(--def); } .card.skill .ty { color: var(--skl); } .card.dodge .ty { color: var(--dge); }
+  .card.attack .ty { color: var(--atk); } .card.defense .ty { color: var(--def); } .card.skill .ty { color: var(--skl); } .card.dodge .ty { color: var(--dge); } .card.support .ty { color: var(--sup); }
   .card .nm { font-weight: 700; font-size: 13px; margin-top: 2px; }
   .card .pw { font-size: 11px; color: var(--muted); }
   .card .pw b { color: var(--text); font-size: 14px; }
@@ -168,9 +352,18 @@ const CONFIG = {
   .card.flip { animation: flip .45s ease-out; }
   @keyframes flip { from { transform: rotateY(90deg); } to { transform: rotateY(0); } }
   .card.dim { opacity: .35; }
+  .card.sel { outline: 3px solid var(--gold); outline-offset: 1px; }
+  .card.glow { animation: glow 1s ease-out; box-shadow: 0 0 14px var(--gold); }
+  @keyframes glow { 0% { box-shadow: 0 0 0 var(--gold); transform: scale(1); } 30% { box-shadow: 0 0 22px var(--gold); transform: scale(1.08); } 100% { box-shadow: 0 0 14px var(--gold); transform: scale(1); } }
   .card .final { position: absolute; right: 4px; bottom: 3px; font-size: 13px; font-weight: 800; color: var(--gold); }
+  .card .ctag { position: absolute; left: 50%; top: -9px; transform: translateX(-50%); background: var(--gold); color: #222; font-size: 10px; font-weight: 900; padding: 0 5px; border-radius: 5px; white-space: nowrap; }
 
-  .hand { display: grid; grid-template-columns: repeat(5, 1fr); gap: 5px; margin: 8px 0; }
+  .supports { display: grid; gap: 5px; margin: 6px 0; }
+  .suprow { display: grid; grid-template-columns: 44px repeat(4, minmax(0,1fr)); gap: 4px; align-items: stretch; }
+  .supname { font-size: 11px; font-weight: 700; display: flex; flex-direction: column; justify-content: center; text-align: center; background: var(--panel); border-radius: 8px; }
+  .supname small { color: var(--sup); font-weight: 600; }
+  .suprow .card { min-height: 62px; }
+  .hand { display: grid; grid-template-columns: repeat(5, 1fr); gap: 5px; margin: 6px 0; }
   .hand .card { min-height: 92px; }
   .hint { font-size: 12px; color: var(--muted); min-height: 16px; text-align: center; }
   .actbtn { width: 100%; padding: 13px; border-radius: 10px; background: var(--gold); color: #222; font-weight: 700; font-size: 15px; margin: 6px 0; }
@@ -181,11 +374,13 @@ const CONFIG = {
   #log { background: #0f1115; border-radius: 10px; padding: 8px; max-height: 50vh; overflow-y: auto; font-size: 12.5px; line-height: 1.5; margin-top: 6px; }
   .le { padding: 5px 0; border-bottom: 1px solid #22252c; }
   .le.turn { color: var(--gold); font-weight: 700; border-bottom: 0; padding-top: 10px; }
+  .le.battle { color: #fff; background: #2a2f3a; border-radius: 6px; padding: 6px; margin-top: 8px; font-weight: 700; }
   .le.sys { color: var(--muted); font-size: 12px; }
+  .le.sup { color: #9fe6e6; }
   .le .why { color: #d7c27a; }
   .le .res { font-weight: 700; }
   .le .note { color: var(--muted); font-size: 11.5px; }
-  .tA { color: var(--atk); } .tD { color: var(--def); } .tS { color: var(--skl); } .tG { color: var(--dge); }
+  .tA { color: var(--atk); } .tD { color: var(--def); } .tS { color: var(--skl); } .tG { color: var(--dge); } .tU { color: var(--sup); }
   .ok { color: var(--hp); } .ng { color: #e08a4f; }
 
   /* ---------- 彈窗 ---------- */
@@ -196,30 +391,46 @@ const CONFIG = {
   .mbox table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
   .mbox th, .mbox td { padding: 4px 3px; border-bottom: 1px solid #333; text-align: center; }
   .mbox th:first-child, .mbox td:first-child { text-align: left; }
-  .mbox .row { display: flex; gap: 6px; margin-top: 14px; }
+  .mbox .row { display: flex; gap: 6px; margin-top: 14px; flex-wrap: wrap; }
   .mbox .row button { flex: 1; padding: 11px; border-radius: 8px; background: var(--panel2); font-weight: 700; }
   .mbox .row button.pri { background: var(--gold); color: #222; }
+  .choices { display: grid; gap: 8px; }
+  .choice { text-align: left; background: var(--panel2); border-radius: 10px; padding: 10px 12px; border: 2px solid transparent; }
+  .choice:active { border-color: var(--gold); }
+  .choice b { font-size: 15px; } .choice div { font-size: 12px; color: #cfd3da; margin-top: 3px; line-height: 1.5; }
   .pile { display: flex; flex-wrap: wrap; gap: 5px; }
   .pile .chip { background: var(--panel2); border-radius: 6px; padding: 3px 7px; font-size: 12px; border-left: 3px solid #666; }
-  .chip.attack { border-left-color: var(--atk); } .chip.defense { border-left-color: var(--def); } .chip.skill { border-left-color: var(--skl); } .chip.dodge { border-left-color: var(--dge); }
+  .chip.attack { border-left-color: var(--atk); } .chip.defense { border-left-color: var(--def); } .chip.skill { border-left-color: var(--skl); } .chip.dodge { border-left-color: var(--dge); } .chip.support { border-left-color: var(--sup); }
+  button.chip { font-size: 12px; }
   .rules { font-size: 13px; line-height: 1.6; }
   .rules ul { padding-left: 18px; margin: 4px 0; }
+  .dbrow { display: flex; align-items: center; gap: 6px; padding: 6px 0; border-bottom: 1px solid #333; }
+  .dbrow .dl { flex: 1; font-size: 12.5px; line-height: 1.35; }
+  .dbrow .dl small { color: var(--muted); }
+  .dbrow .ex { font-size: 10px; color: var(--gold); border: 1px solid var(--gold); border-radius: 4px; padding: 0 3px; margin-left: 3px; }
+  .dbrow button { width: 34px; height: 34px; border-radius: 8px; background: var(--panel2); font-size: 18px; font-weight: 700; }
+  .dbrow button:disabled { opacity: .3; }
+  .dbrow .n { width: 22px; text-align: center; font-weight: 800; font-size: 16px; }
+  .dbsum { position: sticky; top: -14px; background: var(--panel); padding: 6px 0; font-size: 13px; z-index: 1; border-bottom: 1px solid #444; }
+  #toast { position: fixed; left: 50%; bottom: 30px; transform: translateX(-50%); background: #000c; padding: 8px 14px; border-radius: 8px; font-size: 13px; z-index: 20; pointer-events: none; transition: opacity .3s; opacity: 0; max-width: 90vw; }
+  #toast.show { opacity: 1; }
+
   /* ---------- 響應式 ---------- */
-  #app { padding-left: max(10px, env(safe-area-inset-left)); padding-right: max(10px, env(safe-area-inset-right)); padding-bottom: max(40px, env(safe-area-inset-bottom)); }
-  @media (max-width: 360px) {           /* 小螢幕手機 */
+  @media (max-width: 360px) {
     html, body { font-size: 13px; }
     #app { padding-left: 6px; padding-right: 6px; }
     .hand { gap: 3px; } .arena { gap: 4px; grid-template-columns: minmax(0,1fr) 52px 52px minmax(0,1fr); }
     .card { padding: 3px; } .card .nm { font-size: 12px; } .card .ef { font-size: 8.5px; }
     .sbtn { padding: 5px 6px; font-size: 11px; }
+    .suprow { grid-template-columns: 38px repeat(4, minmax(0,1fr)); }
   }
-  @media (min-width: 560px) {           /* 大手機橫放／平板 */
+  @media (min-width: 560px) {
     .card { min-height: 96px; } .hand .card { min-height: 104px; }
     .card .nm { font-size: 15px; } .card .ef { font-size: 11px; }
   }
-  @media (min-width: 900px) {           /* 桌機：左邊對戰、右邊紀錄 */
+  @media (min-width: 900px) {
     #app { max-width: 1040px; }
-    #selectScreen { max-width: 480px; margin: 0 auto; }
+    #titleScreen, #mapScreen { max-width: 480px; margin: 0 auto; }
     .gamecols { display: grid; grid-template-columns: 480px 1fr; gap: 16px; align-items: start; }
     .gside { position: sticky; top: 8px; }
     .gside .loghead { margin-top: 0; }
@@ -227,41 +438,50 @@ const CONFIG = {
     .arena { grid-template-columns: minmax(0,1fr) 80px 80px minmax(0,1fr); }
     .fighter .glyph { font-size: 40px; }
   }
-  #toast { position: fixed; left: 50%; bottom: 30px; transform: translateX(-50%); background: #000c; padding: 8px 14px; border-radius: 8px; font-size: 13px; z-index: 20; pointer-events: none; transition: opacity .3s; opacity: 0; }
-  #toast.show { opacity: 1; }
 </style>
 </head>
 <body>
 <div id="app">
-  <!-- 角色選擇 -->
-  <div id="selectScreen">
-    <h1>卡牌對決 · 原型</h1>
-    <div class="hint" style="text-align:left">攻擊 &gt; 技巧 &gt; 防禦 &gt; 攻擊</div>
-    <h2>選擇你的角色</h2>
-    <div class="charlist" id="pickMe"></div>
-    <div id="meDetail"></div>
-    <h2>選擇對手角色</h2>
-    <div class="charlist" id="pickOpp"></div>
-    <div id="oppDetail"></div>
-    <h2>牌組</h2>
-    <div id="pickDecks"></div>
+  <!-- 標題：選起始角色、設定牌組 -->
+  <div id="titleScreen">
+    <h1>卡牌對決 · 冒險原型</h1>
+    <div class="muted" style="font-size:12px">攻擊 &gt; 技巧 &gt; 防禦 &gt; 攻擊・3 張地圖，每張 10 步，最後打王</div>
+    <h2>選擇起始角色</h2>
+    <div class="charlist" id="pickStart"></div>
+    <div id="startDetail"></div>
+    <h2>牌組設定（每個角色：戰鬥牌組＋輔助牌組，沒設定就用預設）</h2>
+    <div class="decklist" id="deckList"></div>
     <h2>規則實驗</h2>
     <div id="pickRules"></div>
-    <button class="bigbtn" id="startBtn">開始對戰</button>
+    <button class="bigbtn" id="startBtn">開始冒險</button>
     <button class="sbtn" style="margin-top:12px" onclick="showRules()">規則說明</button>
   </div>
 
-  <!-- 對戰 -->
+  <!-- 地圖 -->
+  <div id="mapScreen" class="hidden">
+    <div class="topbar">
+      <span class="turn" id="mapTitle"></span>
+      <button class="sbtn" onclick="showRunDecks()">牌組</button>
+      <button class="sbtn" onclick="showRules()">規則</button>
+      <button class="sbtn" onclick="confirmQuit()">放棄</button>
+    </div>
+    <div class="party" id="partyBox"></div>
+    <div class="gear" id="gearBox"></div>
+    <svg id="mapSvg"></svg>
+    <div class="legend">⚔️ 怪物　💀 精英　❤️ 回血　✨ 祝福　🔄 換卡　🎁 寶箱　❓ 事件　👑 王<br>點發光的點前進。打普通怪可以提升主角，精英、寶箱、王可以拿裝備。</div>
+  </div>
+
+  <!-- 戰鬥 -->
   <div id="gameScreen" class="hidden">
     <div class="topbar">
       <span class="turn" id="turnLbl"></span>
       <button class="sbtn" onclick="showPiles()">棄牌堆</button>
       <button class="sbtn" onclick="showRules()">規則</button>
       <button class="sbtn" id="speedBtn" onclick="toggleSpeed()">速度 1x</button>
-      <button class="sbtn" onclick="confirmQuit()">選單</button>
     </div>
     <div class="gamecols"><div class="gmain">
-    <div class="arena" id="board"></div>
+    <div id="arenaWrap"><div class="arena" id="board"></div><div id="fx"></div></div>
+    <div class="supports" id="supports"></div>
     <div class="energy" id="energy"></div>
     <div class="hand" id="hand"></div>
     <div class="hint" id="hint"></div>
@@ -272,7 +492,7 @@ const CONFIG = {
     </div></div>
   </div>
 </div>
-<div id="modal" class="modal hidden" onclick="if(event.target===this)closeModal()"><div class="mbox" id="mbox"></div></div>
+<div id="modal" class="modal hidden"><div class="mbox" id="mbox"></div></div>
 <div id="toast"></div>
 
 <script>
@@ -280,18 +500,35 @@ const CONFIG = {
 //  共用
 // =====================================================================
 const TYPES = {
-  attack:  { label: '攻擊', short: '攻', beats: 'skill',   cls: 'tA' },
-  skill:   { label: '技巧', short: '技', beats: 'defense', cls: 'tS' },
-  defense: { label: '防禦', short: '防', beats: 'attack',  cls: 'tD' },
-  dodge:   { label: '閃避', short: '閃', beats: null,      cls: 'tG' },
+  attack:  { label: '攻擊', beats: 'skill',   cls: 'tA' },
+  skill:   { label: '技巧', beats: 'defense', cls: 'tS' },
+  defense: { label: '防禦', beats: 'attack',  cls: 'tD' },
+  dodge:   { label: '閃避', beats: null,      cls: 'tG' },
 };
 const CLASH = { higher: '比威力', mutual: '互相傷害', diff: '高減低' };
 const COND = { prevHit: '前格命中', prevBlock: '前格擋下', prevDodge: '前格閃避成功' };
+const NODE_ICON = { monster: '⚔️', elite: '💀', heal: '❤️', buff: '✨', swap: '🔄', treasure: '🎁', event: '❓', boss: '👑' };
+const NODE_NAME = { monster: '怪物', elite: '精英', heal: '回血', buff: '祝福', swap: '換卡', treasure: '寶箱', event: '事件', boss: '王' };
+const sg = n => n >= 0 ? `+${n}` : `−${-n}`;
+const MOD_TEXT = {
+  powAll: n => `所有卡威力 ${sg(n)}`, powAtk: n => `攻擊卡威力 ${sg(n)}`, powSkl: n => `技巧卡威力 ${sg(n)}`, powDef: n => `防禦卡威力 ${sg(n)}`,
+  slot1: n => `第 1 格威力 ${sg(n)}`, counter: n => `擋下反擊 ${sg(n)}`, dodge: n => `閃避率 ${sg(n)}%`,
+  armor: n => `受到傷害 −${n}`, lifesteal: n => `命中時回復 ${n}`, thorns: n => `被命中時反彈 ${n}`,
+  comboDmg: n => `連擊第 2 段起，每段 +${n} 傷害`, lowHpPow: n => `HP ≤ 50% 時所有威力 +${n}`,
+  energy1: n => `第 1 回合能量 +${n}`, killHeal: n => `擊敗敵人後回復 ${n}`, maxHp: n => `最大 HP +${n}`,
+  speed: n => `速度 +${n}`, regen: n => `每回合結束回復 ${n}`, enrage: n => `每回合威力 +${n}（累加）`,
+  heal: n => `回復 ${n} HP`, shield: n => `護盾 ${n}`, dmg: n => `直接造成 ${n} 傷害`,
+  weaken: n => `敵方所有威力 −${n}`, selfDmg: n => `自己失去 ${n} HP`,
+};
+const modText = m => Object.entries(m || {}).filter(([, n]) => n).map(([k, n]) => MOD_TEXT[k](n)).join('，');
 const $ = s => document.querySelector(s);
 const def = key => CONFIG.cards[key];
+const sdef = key => CONFIG.supportCards[key];
 const bump = (o, k, n = 1) => { o[k] = (o[k] || 0) + n; };
+const pickN = (arr, n) => shuffle(arr.slice()).slice(0, n);
 function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
-function sleep(ms) { return new Promise(r => setTimeout(r, ms * (G && G.fast ? CONFIG.ui.fastFactor : 1))); }
+let fast = false;
+function sleep(ms) { return new Promise(r => setTimeout(r, ms * (fast ? CONFIG.ui.fastFactor : 1))); }
 function condMet(cond, prev) { return { prevHit: 'hit', prevBlock: 'block', prevDodge: 'dodge' }[cond] === prev; }
 
 function effText(d, short) {
@@ -305,132 +542,376 @@ function effText(d, short) {
   return t.join('；');
 }
 function cardLabel(key) { const d = def(key); return `<span class="${TYPES[d.type].cls}">${d.name}［${TYPES[d.type].label}］</span>`; }
+function supLabel(key) { return `<span class="tU">${sdef(key).name}［輔助］</span>`; }
+function cardDesc(k) { const d = def(k); return `費${d.cost}｜${d.dodgeChance != null ? `閃避率 ${Math.round(d.dodgeChance * 100)}%` : `威力${d.power}`}${effText(d) ? '｜' + effText(d) : ''}`; }
+function cardLine(k) { return `${cardLabel(k)} ${cardDesc(k)}`; }
+function supLine(k) { return `${supLabel(k)}｜${modText(sdef(k).mods)}`; }
 function cardHTML(key, extra = '', inner = '') {
   const d = def(key);
   if (d.type === 'dodge') inner = inner.replace(/<span class="final">.*?<\/span>/, '');
   return `<div class="card ${d.type} ${extra}"><div class="ctop"><span class="cost">${d.cost}</span><span class="ty">${TYPES[d.type].label}</span></div>
     <div class="nm">${d.name}</div><div class="pw">${d.dodgeChance != null ? `閃避 <b>${Math.round(d.dodgeChance * 100)}%</b>` : `威力 <b>${d.power}</b>`}</div><div class="ef">${effText(d, true)}</div>${inner}</div>`;
 }
-function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), 1600); }
+function supCardHTML(key, extra = '') {
+  return `<div class="card support ${extra}"><div class="ctop"><span class="ty">輔助</span></div><div class="nm">${sdef(key).name}</div><div class="ef">${modText(sdef(key).mods)}</div></div>`;
+}
+function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), 1800); }
+function showScreen(id) { ['#titleScreen', '#mapScreen', '#gameScreen'].forEach(s => $(s).classList.toggle('hidden', s !== id)); window.scrollTo(0, 0); }
 
 // =====================================================================
-//  遊戲狀態
+//  牌組（戰鬥＋輔助），自訂的存在瀏覽器
+// =====================================================================
+const DECK_KIND = {
+  battle:  { label: '戰鬥', pool: k => [...CONFIG.commonCards, ...CONFIG.characters[k].cards], min: () => CONFIG.deckSize, max: () => CONFIG.deckSize,
+             def: k => ({ ...CONFIG.characters[k].defaultDeck }), label1: cardLabel, desc: cardDesc, typeOf: k => def(k).type, name: k => def(k).name },
+  support: { label: '輔助', pool: k => [...CONFIG.commonSupport, ...CONFIG.characters[k].support], min: () => CONFIG.supportDeckMin, max: () => CONFIG.supportDeckMax,
+             def: k => { const d = { ...CONFIG.defaultSupportCommon }; CONFIG.characters[k].support.forEach(s => d[s] = 2); return d; },
+             label1: supLabel, desc: k => modText(sdef(k).mods), typeOf: () => 'support', name: k => sdef(k).name },
+};
+const deckCount = d => Object.values(d).reduce((a, b) => a + b, 0);
+function deckValid(kind, charKey, d) {
+  const K = DECK_KIND[kind], pool = K.pool(charKey), n = deckCount(d);
+  return n >= K.min() && n <= K.max() && Object.entries(d).every(([k, c]) => pool.includes(k) && c >= 0 && c <= CONFIG.maxCopies);
+}
+let savedDecks = { battle: {}, support: {} };
+try { savedDecks = Object.assign(savedDecks, JSON.parse(localStorage.getItem('cardDuel.decks2') || '{}')); } catch (e) {}
+function saveDecks() { try { localStorage.setItem('cardDuel.decks2', JSON.stringify(savedDecks)); } catch (e) {} }
+function deckFor(kind, charKey) {
+  const d = savedDecks[kind][charKey];
+  return d && deckValid(kind, charKey, d) ? { ...d } : DECK_KIND[kind].def(charKey);
+}
+const deckSummary = (kind, d) => Object.entries(d).filter(([, n]) => n > 0).map(([k, n]) => `${DECK_KIND[kind].name(k)}×${n}`).join('、');
+
+// =====================================================================
+//  冒險（RUN）狀態
+// =====================================================================
+let RUN = null;
+const equipSum = k => RUN ? RUN.equipment.reduce((s, e) => s + (CONFIG.equipment[e].mods[k] || 0), 0) : 0;
+const charMaxHp = c => c.ch.hp + (c.ups.maxHp || 0) + equipSum('maxHp');
+const charSpeed = c => c.ch.speed + (c.ups.speed || 0) + RUN.buffs.reduce((s, b) => s + (CONFIG.buffs[b.key].mods.speed || 0), 0);
+const mainChar = () => RUN.party[RUN.main];
+function newCharState(key) {
+  const ch = CONFIG.characters[key];
+  return { key, ch, hp: ch.hp + equipSum('maxHp'), ups: {}, upNames: [], battle: deckFor('battle', key), support: deckFor('support', key) };
+}
+function healChar(c, n) { const before = c.hp; c.hp = Math.min(charMaxHp(c), c.hp + n); return c.hp - before; }
+function newStats() { return { use: {}, dmg: {}, eff: {}, sup: {}, supDmg: 0, hits: 0, blocks: 0, breaks: 0, dodges: 0, dmgDealt: 0, dmgTaken: 0, shuffles: 0 }; }
+function mergeStats(into, s) {
+  ['use', 'dmg', 'sup'].forEach(k => Object.entries(s[k]).forEach(([c, n]) => bump(into[k], c, n)));
+  Object.entries(s.eff).forEach(([c, e]) => { const t = into.eff[c] || (into.eff[c] = { ok: 0, miss: 0 }); t.ok += e.ok; t.miss += e.miss; });
+  ['supDmg', 'hits', 'blocks', 'breaks', 'dodges', 'dmgDealt', 'dmgTaken', 'shuffles'].forEach(k => into[k] += s[k]);
+}
+
+function startRun(startKey) {
+  G = null;
+  RUN = { map: 0, party: [], main: 0, equipment: [], buffs: [], mapState: null, over: false, won: false,
+          stats: newStats(), battles: 0, maxCombo: 0, history: [] };
+  RUN.party.push(newCharState(startKey));
+  $('#log').innerHTML = '';
+  log(`<div class="le battle">冒險開始：${CONFIG.characters[startKey].name}｜規則：攻擊對攻擊＝${CLASH[CONFIG.attackClash]}</div>`);
+  RUN.mapState = genMap(0);
+  showMap();
+}
+
+// =====================================================================
+//  地圖：3 條路線、每張 10 步（最後一步是王）
+// =====================================================================
+function genMap(mi) {
+  const M = CONFIG.mapGen, L = M.lanes, S = M.steps - 1;   // S＝一般步數（不含王）
+  const bag = [];
+  Object.entries(M.nodes).forEach(([t, n]) => { for (let i = 0; i < n; i++) bag.push(t); });
+  while (bag.length < (S - 2) * L) bag.push('monster');
+  shuffle(bag);
+  const before = shuffle(M.beforeBoss.slice());
+  const nodes = [], edges = [];
+  for (let s = 0; s < S; s++) {
+    nodes.push([]);
+    for (let l = 0; l < L; l++) nodes[s].push(s === 0 ? 'monster' : s === S - 1 ? before[l % before.length] : bag.pop() || 'monster');
+  }
+  for (let s = 0; s < S - 1; s++) {
+    edges.push([]);
+    for (let l = 0; l < L; l++) edges[s].push([l]);
+    for (let l = 0; l < L - 1; l++) {          // 相鄰路線之間最多一條斜線，避免交叉
+      const r = Math.random();
+      if (r < M.crossChance / 2) edges[s][l].push(l + 1);
+      else if (r < M.crossChance) edges[s][l + 1].push(l);
+    }
+  }
+  return { mi, S, L, nodes, edges, pos: null, visited: [] };
+}
+function availNodes() {
+  const m = RUN.mapState;
+  if (!m.pos) return m.nodes[0].map((_, l) => ({ s: 0, l }));
+  if (m.pos.s === m.S - 1) return [{ s: m.S, l: 1 }];        // 王
+  if (m.pos.s >= m.S) return [];
+  return m.edges[m.pos.s][m.pos.l].map(l => ({ s: m.pos.s + 1, l }));
+}
+const nodeType = (s, l) => s >= RUN.mapState.S ? 'boss' : RUN.mapState.nodes[s][l];
+
+function showMap() {
+  showScreen('#mapScreen');
+  const m = RUN.mapState, mp = CONFIG.maps[m.mi];
+  $('#mapTitle').textContent = `地圖 ${m.mi + 1}/${CONFIG.maps.length}：${mp.name}・第 ${m.pos ? m.pos.s + 1 : 0}/${m.S + 1} 步`;
+  $('#partyBox').innerHTML = RUN.party.map((c, i) => {
+    const mx = charMaxHp(c), pct = c.hp / mx * 100;
+    return `<div class="pm"><span class="role ${i === RUN.main ? 'main' : ''}">${i === RUN.main ? '主角' : '輔助'}</span><span class="nm">${c.ch.name}</span>
+      <div class="bar"><div class="hpwrap" style="height:10px"><div class="hpfill ${pct <= 30 ? 'low' : ''}" style="width:${pct}%"></div></div></div>
+      <span>${c.hp}/${mx}</span><button class="sbtn" onclick="showCharInfo(${i})">詳情</button></div>`;
+  }).join('');
+  $('#gearBox').innerHTML = (RUN.equipment.length || RUN.buffs.length ? '' : '<span class="muted">還沒有裝備</span>') +
+    RUN.equipment.map(e => `<button class="chip" onclick="toast('${CONFIG.equipment[e].name}：${modText(CONFIG.equipment[e].mods)}')">${CONFIG.equipment[e].icon} ${CONFIG.equipment[e].name}</button>`).join('') +
+    RUN.buffs.map(b => `<button class="chip buff" onclick="toast('${CONFIG.buffs[b.key].name}：${modText(CONFIG.buffs[b.key].mods)}（剩 ${b.left} 場）')">✨ ${CONFIG.buffs[b.key].name} ×${b.left}</button>`).join('');
+
+  // SVG：上面是第 1 步，往下走，最下面是王
+  const W = 300, RH = 56, top = 28, X = l => 50 + l * 100, Y = s => top + s * RH;
+  const H = Y(m.S) + 34;
+  const av = availNodes(), isAv = (s, l) => av.some(a => a.s === s && a.l === l);
+  const visited = (s, l) => m.visited.some(v => v.s === s && v.l === l);
+  let svg = '';
+  const edge = (l1, s1, l2, s2) => { const used = visited(s1, l1) && visited(s2, l2);
+    return `<line x1="${X(l1)}" y1="${Y(s1)}" x2="${X(l2)}" y2="${Y(s2)}" stroke="${used ? '#f0c04a' : '#454b58'}" stroke-width="${used ? 4 : 2.5}"/>`; };
+  for (let s = 0; s < m.S - 1; s++) for (let l = 0; l < m.L; l++) m.edges[s][l].forEach(l2 => { svg += edge(l, s, l2, s + 1); });
+  for (let l = 0; l < m.L; l++) svg += edge(l, m.S - 1, 1, m.S);
+  const nodeSvg = (s, l, t) => {
+    const cur = m.pos && m.pos.s === s && m.pos.l === l, av1 = isAv(s, l), vis = visited(s, l);
+    const r = t === 'boss' ? 26 : 19;
+    return `<g class="node ${av1 ? 'avail' : ''}" ${av1 ? `data-node="${s},${l}"` : ''} opacity="${av1 || vis ? 1 : .5}">
+      <circle cx="${X(l)}" cy="${Y(s)}" r="${r}" fill="${cur ? '#5a4a1a' : vis ? '#2d3a2f' : '#262a33'}" stroke="${cur ? '#f0c04a' : '#555'}" stroke-width="${cur ? 3 : 1.5}"/>
+      <text x="${X(l)}" y="${Y(s) + 1}" text-anchor="middle" dominant-baseline="middle" font-size="${t === 'boss' ? 24 : 17}">${NODE_ICON[t]}</text></g>`;
+  };
+  for (let s = 0; s < m.S; s++) {
+    svg += `<text x="8" y="${Y(s) + 4}" fill="#666" font-size="11">${s + 1}</text>`;
+    for (let l = 0; l < m.L; l++) svg += nodeSvg(s, l, m.nodes[s][l]);
+  }
+  svg += `<text x="8" y="${Y(m.S) + 4}" fill="#666" font-size="11">${m.S + 1}</text>` + nodeSvg(m.S, 1, 'boss');
+  const el = $('#mapSvg'); el.setAttribute('viewBox', `0 0 ${W} ${H}`); el.innerHTML = svg;
+  if (m.pos) setTimeout(() => window.scrollTo(0, Math.max(0, el.getBoundingClientRect().top + window.scrollY + Y(m.pos.s) * el.clientWidth / W - 160)), 30);
+}
+$('#mapSvg').addEventListener('click', e => {
+  const g = e.target.closest('[data-node]'); if (!g) return;
+  const [s, l] = g.dataset.node.split(',').map(Number);
+  enterNode(s, l);
+});
+function enterNode(s, l) {
+  const m = RUN.mapState;
+  m.pos = { s, l }; m.visited.push({ s, l });
+  const t = nodeType(s, l);
+  RUN.history.push(`${m.mi + 1}-${s + 1}${NODE_NAME[t]}`);
+  if (t === 'monster' || t === 'elite' || t === 'boss') return startBattle(t);
+  ({ heal: nodeHeal, buff: nodeBuff, swap: nodeSwap, treasure: nodeTreasure, event: nodeEvent })[t]();
+}
+
+// ---------- 彈窗、三選一 ----------
+function openModal(html) { $('#mbox').innerHTML = html; $('#modal').classList.remove('hidden'); $('#modal').scrollTop = 0; }
+function closeModal() { $('#modal').classList.add('hidden'); edit = null; }
+let CHOICES = [];   // [{ title, desc, fn }]：點了就關掉彈窗並執行 fn
+function choiceModal(title, text, opts, extra = '') {
+  CHOICES = opts;
+  openModal(`<h3>${title}</h3>${text ? `<div style="font-size:13px;margin-bottom:10px;line-height:1.6">${text}</div>` : ''}
+    <div class="choices">${opts.map((o, i) => `<button class="choice" data-choice="${i}"><b>${o.title}</b>${o.desc ? `<div>${o.desc}</div>` : ''}</button>`).join('')}</div>${extra}`);
+}
+$('#mbox').addEventListener('click', e => {
+  const b = e.target.closest('[data-choice]');
+  if (b) { const o = CHOICES[+b.dataset.choice]; CHOICES = []; closeModal(); o.fn(); }
+});
+
+// ---------- 非戰鬥的點 ----------
+function healAll(pct) { return RUN.party.map(c => `${c.ch.name} +${healChar(c, Math.round(charMaxHp(c) * pct))}`).join('、'); }
+function nodeHeal() {
+  const txt = healAll(CONFIG.healPct);
+  log(`<div class="le sys">❤️ 營火：${txt}</div>`);
+  choiceModal('❤️ 營火', `全隊回復 ${Math.round(CONFIG.healPct * 100)}% HP：${txt}`, [{ title: '繼續前進', fn: showMap }]);
+}
+function gainEquip(k) {
+  RUN.equipment.push(k);
+  const mh = CONFIG.equipment[k].mods.maxHp; if (mh) RUN.party.forEach(c => c.hp += mh);
+  log(`<div class="le sys">獲得裝備 ${CONFIG.equipment[k].icon}${CONFIG.equipment[k].name}（${modText(CONFIG.equipment[k].mods)}）</div>`);
+}
+function gainUpgrade(c, k) {
+  const m = CONFIG.upgrades[k].mods;
+  Object.entries(m).forEach(([x, n]) => bump(c.ups, x, n));
+  if (m.maxHp) c.hp += m.maxHp;
+  c.upNames.push(CONFIG.upgrades[k].name);
+  log(`<div class="le sys">${c.ch.name} 提升：${CONFIG.upgrades[k].name}（${modText(m)}）</div>`);
+}
+function gainBuff(k) { RUN.buffs.push({ key: k, left: CONFIG.buffBattles }); log(`<div class="le sys">祝福：${CONFIG.buffs[k].name}（${modText(CONFIG.buffs[k].mods)}，${CONFIG.buffBattles} 場）</div>`); }
+const freeEquip = () => Object.keys(CONFIG.equipment).filter(k => !RUN.equipment.includes(k));
+function equipChoices(title, text, then, extra = '') {
+  const opts = pickN(freeEquip(), 3).map(k => ({ title: `${CONFIG.equipment[k].icon} ${CONFIG.equipment[k].name}`, desc: modText(CONFIG.equipment[k].mods), fn: () => { gainEquip(k); then(); } }));
+  if (!opts.length) return choiceModal(title, text + '裝備已經拿光了。', [{ title: '繼續', fn: then }], extra);
+  choiceModal(title, text + '選一件裝備（全隊共用）。', opts, extra);
+}
+function upgradeChoices(title, text, then, extra = '') {
+  const c = mainChar();
+  choiceModal(title, `${text}選一個提升給主角 ${c.ch.name}（永久）。`,
+    pickN(Object.keys(CONFIG.upgrades), 3).map(k => ({ title: CONFIG.upgrades[k].name, desc: modText(CONFIG.upgrades[k].mods), fn: () => { gainUpgrade(c, k); then(); } })), extra);
+}
+function nodeBuff() {
+  choiceModal('✨ 祝福', `選一個祝福，持續 ${CONFIG.buffBattles} 場戰鬥。`,
+    pickN(Object.keys(CONFIG.buffs), 3).map(k => ({ title: CONFIG.buffs[k].name, desc: modText(CONFIG.buffs[k].mods), fn: () => { gainBuff(k); showMap(); } })));
+}
+function nodeTreasure() { equipChoices('🎁 寶箱', '', showMap); }
+function nodeEvent() {
+  const ev = CONFIG.events[Math.floor(Math.random() * CONFIG.events.length)];
+  choiceModal(`❓ ${ev.title}`, ev.text, ev.options.map(o => ({ title: o.label, fn: () => applyEvent(ev.title, o.effects) })));
+}
+function applyEvent(title, e) {
+  const c = mainChar(), msgs = [];
+  if (e.loseHp) { const b = c.hp; c.hp = Math.max(1, c.hp - e.loseHp); msgs.push(`${c.ch.name} 失去 ${b - c.hp} HP`); }
+  if (e.healPct) msgs.push('回復：' + healAll(e.healPct));
+  if (e.maxHp) { bump(c.ups, 'maxHp', e.maxHp); c.hp += e.maxHp; msgs.push(`${c.ch.name} 最大 HP +${e.maxHp}`); }
+  for (let i = 0; i < (e.equip || 0); i++) { const k = pickN(freeEquip(), 1)[0]; if (k) { gainEquip(k); msgs.push(`獲得裝備 ${CONFIG.equipment[k].name}（${modText(CONFIG.equipment[k].mods)}）`); } }
+  for (let i = 0; i < (e.upgrade || 0); i++) { const k = pickN(Object.keys(CONFIG.upgrades), 1)[0]; gainUpgrade(c, k); msgs.push(`${c.ch.name} 獲得提升 ${CONFIG.upgrades[k].name}（${modText(CONFIG.upgrades[k].mods)}）`); }
+  for (let i = 0; i < (e.buff || 0); i++) { const k = pickN(Object.keys(CONFIG.buffs), 1)[0]; gainBuff(k); msgs.push(`獲得祝福 ${CONFIG.buffs[k].name}（${modText(CONFIG.buffs[k].mods)}）`); }
+  log(`<div class="le sys">❓ ${title}：${msgs.join('；') || '什麼也沒發生'}</div>`);
+  choiceModal('結果', msgs.join('<br>') || '什麼也沒發生。', [{ title: '繼續前進', fn: showMap }]);
+}
+// 換卡：選角色 → 選要拿掉的戰鬥卡 → 從 3 張中選一張換進來
+const noSwap = `<div class="row"><button onclick="closeModal();showMap()">不換了</button></div>`;
+function nodeSwap() {
+  if (RUN.party.length === 1) return swapPickOut(0);
+  choiceModal('🔄 換卡', '要調整誰的戰鬥牌組？', RUN.party.map((c, i) => ({ title: c.ch.name, desc: deckSummary('battle', c.battle), fn: () => swapPickOut(i) })), noSwap);
+}
+function swapPickOut(ci) {
+  const c = RUN.party[ci];
+  choiceModal('🔄 換卡：拿掉哪一張？', `${c.ch.name} 的戰鬥牌組`, Object.keys(c.battle).filter(k => c.battle[k] > 0).map(k => ({
+    title: `${def(k).name} ×${c.battle[k]}`, desc: cardDesc(k), fn: () => swapPickIn(ci, k) })), noSwap);
+}
+function swapPickIn(ci, out) {
+  const c = RUN.party[ci];
+  const pool = DECK_KIND.battle.pool(c.key).filter(k => k !== out && (c.battle[k] || 0) < CONFIG.maxCopies);
+  choiceModal('🔄 換卡：換成哪一張？', `拿掉 ${def(out).name}，從下面選一張放進去`, pickN(pool, 3).map(k => ({
+    title: `${def(k).name}（目前 ${c.battle[k] || 0} 張）`, desc: cardDesc(k),
+    fn: () => { c.battle[out]--; if (!c.battle[out]) delete c.battle[out]; bump(c.battle, k); log(`<div class="le sys">🔄 ${c.ch.name}：${def(out).name} → ${def(k).name}</div>`); showMap(); } })), noSwap);
+}
+
+// =====================================================================
+//  戰鬥
 // =====================================================================
 let G = null;
 let uidSeq = 0;
-
-// ---------- 牌組 ----------
-// 牌組 = { 卡牌key: 張數 }
-const cardPool = charKey => [...CONFIG.commonCards, ...CONFIG.characters[charKey].cards];
-const deckCount = d => Object.values(d).reduce((a, b) => a + b, 0);
-function deckValid(charKey, d) {
-  const pool = cardPool(charKey);
-  return deckCount(d) === CONFIG.deckSize && Object.entries(d).every(([k, n]) => pool.includes(k) && n >= 0 && n <= CONFIG.maxCopies);
-}
-function defaultDeck(charKey) { return { ...CONFIG.characters[charKey].defaultDeck }; }
-// 自訂牌組存在瀏覽器（只是方便，存不了也能玩）
-let decks = { me: {}, opp: {} };
-try { decks = Object.assign(decks, JSON.parse(localStorage.getItem('cardDuel.decks') || '{}')); } catch (e) {}
-function saveDecks() { try { localStorage.setItem('cardDuel.decks', JSON.stringify(decks)); } catch (e) {} }
-function deckFor(side, charKey) {
-  const d = decks[side][charKey];
-  return d && deckValid(charKey, d) ? { ...d } : defaultDeck(charKey);
-}
-const deckSummary = d => Object.entries(d).filter(([, n]) => n > 0).map(([k, n]) => `${def(k).name}×${n}`).join('、');
-
-function makePlayer(idx, charKey, deckCounts) {
-  const ch = CONFIG.characters[charKey];
+function buildPile(counts) {
   const deck = [];
-  Object.entries(deckCounts).forEach(([k, n]) => { for (let i = 0; i < n; i++) deck.push({ uid: ++uidSeq, key: k }); });
-  shuffle(deck);
+  Object.entries(counts).forEach(([k, n]) => { for (let i = 0; i < n; i++) deck.push({ uid: ++uidSeq, key: k }); });
+  return shuffle(deck);
+}
+function makeMonster(kind) {
+  const m = RUN.mapState, mp = CONFIG.maps[m.mi], S = CONFIG.scaling;
+  const key = kind === 'boss' ? mp.boss : mp.monsters[Math.floor(Math.random() * mp.monsters.length)];
+  const md = CONFIG.monsters[key], step = Math.min(m.pos.s, m.S - 1);
+  const hp = Math.round(md.hp * (1 + S.hpPerStep * step) * (kind === 'elite' ? S.eliteHp : 1));
+  const pow = mp.powBonus + Math.floor(step / S.powEverySteps) + (kind === 'elite' ? S.elitePow : 0);
+  const src = [];
+  if (pow) src.push({ name: kind === 'elite' ? '地圖強度＋精英' : '地圖強度', mods: { powAll: pow } });
+  if (md.traits) src.push({ name: '特性', mods: { ...md.traits } });
   return {
-    idx, name: idx === 0 ? '你' : '對手', charKey, ch, hp: ch.hp, maxHp: ch.hp, deckCounts,
-    deckKeys: cardPool(charKey).filter(k => deckCounts[k] > 0),
-    deck, hand: [], discard: [], slots: Array(CONFIG.slots).fill(null),
-    stats: { use: {}, dmg: {}, eff: {}, hits: 0, blocks: 0, breaks: 0, dodges: 0, dmgDealt: 0, shuffles: 0 },
+    idx: 1, isPlayer: false, name: '敵方', title: (kind === 'elite' ? '精英' : '') + md.name, icon: md.icon, key,
+    hp, maxHp: hp, speed: md.speed, deckCounts: { ...md.deck }, deckKeys: Object.keys(md.deck),
+    deck: buildPile(md.deck), hand: [], discard: [], slots: Array(CONFIG.slots).fill(null),
+    src, roundSrc: [], shield: 0, combo: 0, stats: newStats(), traits: md.traits || {},
   };
 }
-const who = p => `${p.name}（${p.ch.name}）`;
-const resultText = () => G.winner < 0 ? '雙方同時倒下，平手！' : `${who(G.players[G.winner])} 獲勝！`;
+function makePlayerSide() {
+  const c = mainChar();
+  const src = RUN.equipment.map(e => ({ name: CONFIG.equipment[e].name, mods: CONFIG.equipment[e].mods }));
+  if (c.upNames.length) src.push({ name: '角色提升', mods: c.ups });
+  RUN.buffs.forEach(b => src.push({ name: CONFIG.buffs[b.key].name, mods: CONFIG.buffs[b.key].mods }));
+  return {
+    idx: 0, isPlayer: true, name: '你', title: c.ch.name, char: c,
+    hp: c.hp, maxHp: charMaxHp(c), speed: charSpeed(c), deckCounts: { ...c.battle }, deckKeys: Object.keys(c.battle),
+    deck: buildPile(c.battle), hand: [], discard: [], slots: Array(CONFIG.slots).fill(null),
+    src, roundSrc: [], shield: 0, combo: 0, stats: newStats(), energy: CONFIG.energyPerTurn,
+    supports: RUN.party.filter((_, i) => i !== RUN.main).map(sc => ({ name: sc.ch.name, title: sc.ch.name + '（輔助）', deck: buildPile(sc.support), hand: [], discard: [], chosen: null })),
+  };
+}
+// 某個效果欄位的總和，並附上來源（給戰鬥紀錄用）
+function modOf(p, key) {
+  let n = 0; const t = [];
+  [...p.src, ...p.roundSrc].forEach(s => { const v = s.mods[key]; if (v) { n += v; t.push(`${s.name}${sg(v)}`); } });
+  return { n, txt: t.join('、') };
+}
 
-function startGame(meKey, oppKey, meDeck = deckFor('me', meKey), oppDeck = deckFor('opp', oppKey)) {
-  const fast = G ? G.fast : false;
-  G = { players: [makePlayer(0, meKey, meDeck), makePlayer(1, oppKey, oppDeck)], turn: 0, phase: 'select', fast, matchups: {},
-        revealed: [], slotRes: [], slotPow: [], active: -1, anim: -1, flash: [], over: false, winner: null,
-        lastPick: [meKey, oppKey, meDeck, oppDeck] };
-  $('#log').innerHTML = '';
-  log(`<div class="le sys">規則：攻擊對攻擊＝${CLASH[CONFIG.attackClash]}</div>`);
-  G.players.forEach(p => log(`<div class="le sys">${who(p)} HP ${p.hp}・速度 ${p.ch.speed}｜牌組：${deckSummary(p.deckCounts)}</div>`));
-  $('#selectScreen').classList.add('hidden');
-  $('#gameScreen').classList.remove('hidden');
+function startBattle(kind) {
+  const P = makePlayerSide(), E = makeMonster(kind);
+  G = { kind, players: [P, E], turn: 0, phase: 'select', matchups: {}, revealed: [], slotRes: [], slotPow: [], slotGlow: [],
+        active: -1, anim: -1, flash: [], comboPop: [], supFlip: false, over: false, winner: null };
+  RUN.battles++;
+  log(`<div class="le battle">⚔ 第 ${RUN.battles} 場（地圖 ${RUN.mapState.mi + 1}・第 ${RUN.mapState.pos.s + 1} 步・${NODE_NAME[kind]}）：
+    ${P.title} HP ${P.hp}/${P.maxHp} 速度 ${P.speed} vs ${E.icon}${E.title} HP ${E.hp} 速度 ${E.speed}${E.src.length ? '｜' + E.src.map(s => `${s.name}：${modText(s.mods)}`).join('；') : ''}</div>`);
+  if (P.src.length) log(`<div class="le sys">我方加成：${P.src.map(s => `${s.name}（${modText(s.mods)}）`).join('、')}</div>`);
+  if (P.supports.length) log(`<div class="le sys">輔助：${P.supports.map(s => s.name).join('、')}</div>`);
+  showScreen('#gameScreen');
   newTurn();
 }
 
-function drawTo(p) {
-  while (p.hand.length < CONFIG.handSize) {
+function drawTo(owner, p, n) {
+  while (p.hand.length < n) {
     if (!p.deck.length) {
       if (!p.discard.length) break;
-      p.deck = shuffle(p.discard); p.discard = []; p.stats.shuffles++;
-      log(`<div class="le sys">${who(p)} 牌庫用盡，棄牌堆 ${p.deck.length} 張洗回牌庫。</div>`);
+      p.deck = shuffle(p.discard); p.discard = [];
+      owner.stats.shuffles++;
+      log(`<div class="le sys">${p.title} 牌庫用盡，棄牌堆 ${p.deck.length} 張洗回牌庫。</div>`);
     }
     p.hand.push(p.deck.pop());
   }
 }
-
 function newTurn() {
+  const [P, E] = G.players;
   G.turn++; G.phase = 'select';
   G.revealed = Array(CONFIG.slots).fill(false);
   G.slotRes = Array(CONFIG.slots).fill(null);
   G.slotPow = Array(CONFIG.slots).fill(null);
+  G.slotGlow = Array(CONFIG.slots).fill(null).map(() => [false, false]);
   G.active = -1;
-  log(`<div class="le turn">— 第 ${G.turn} 回合 — 你 HP ${G.players[0].hp} ／ 對手 HP ${G.players[1].hp}</div>`);
-  G.players.forEach(p => { p.slots = Array(CONFIG.slots).fill(null); drawTo(p); });
+  P.roundSrc = []; E.roundSrc = []; P.shield = 0; E.shield = 0;
+  if (E.traits.enrage && G.turn > 1) E.roundSrc.push({ name: `狂暴×${G.turn - 1}`, mods: { powAll: E.traits.enrage * (G.turn - 1) } });
+  const e1 = modOf(P, 'energy1');
+  P.energy = CONFIG.energyPerTurn + (G.turn === 1 ? e1.n : 0);
+  log(`<div class="le turn">— 第 ${G.turn} 回合 — 你 HP ${P.hp} ／ ${E.title} HP ${E.hp}${P.energy > CONFIG.energyPerTurn ? `｜能量 ${P.energy}（${e1.txt}）` : ''}</div>`);
+  [P, E].forEach(p => { p.slots = Array(CONFIG.slots).fill(null); drawTo(p, p, CONFIG.handSize); });
+  P.supports.forEach(s => { s.chosen = null; drawTo(P, s, CONFIG.supportHandSize); });
   render();
 }
 
-// =====================================================================
-//  出牌合法性
-// =====================================================================
+// ---------- 出牌合法性 ----------
 const slotCost = p => p.slots.reduce((s, c) => s + (c ? def(c.key).cost : 0), 0);
-
-// 所有長度為 k、總費用 ≤ 能量 的「有序」出牌（回傳卡牌陣列的陣列）
-function orderedPlays(cards, k) {
-  const out = [];
-  const used = Array(cards.length).fill(false);
+function orderedPlays(cards, k, energy) {
+  const out = [], used = Array(cards.length).fill(false);
   (function rec(cur, cost) {
     if (cur.length === k) { out.push(cur.slice()); return; }
     for (let i = 0; i < cards.length; i++) {
       if (used[i]) continue;
       const c = def(cards[i].key).cost;
-      if (cost + c > CONFIG.energyPerTurn) continue;
+      if (cost + c > energy) continue;
       used[i] = true; cur.push(cards[i]); rec(cur, cost + c); cur.pop(); used[i] = false;
     }
   })([], 0);
   return out;
 }
-// 手牌最多能排幾張（通常是 3；若費用不夠湊滿才會少於 3）
-function maxPlayable(cards) {
+function maxPlayable(cards, energy) {
   const costs = cards.map(c => def(c.key).cost).sort((a, b) => a - b);
   let n = 0, s = 0;
-  for (const c of costs) { if (n >= CONFIG.slots || s + c > CONFIG.energyPerTurn) break; s += c; n++; }
+  for (const c of costs) { if (n >= CONFIG.slots || s + c > energy) break; s += c; n++; }
   return n;
 }
 function lockState(p) {
   const filled = p.slots.filter(Boolean).length;
-  const need = maxPlayable([...p.hand, ...p.slots.filter(Boolean)]);
-  if (filled >= need) return { ok: true, msg: filled < CONFIG.slots ? `手牌費用無法湊滿 ${CONFIG.slots} 張，可留空格` : '' };
-  const canAdd = p.slots.includes(null) && p.hand.some(c => slotCost(p) + def(c.key).cost <= CONFIG.energyPerTurn);
-  return { ok: false, msg: canAdd ? `點手牌排入格子（還要 ${need - filled} 張）` : `費用超出：這手牌可以排滿 ${need} 張，請調整` };
+  const need = maxPlayable([...p.hand, ...p.slots.filter(Boolean)], p.energy);
+  if (filled < need) {
+    const canAdd = p.slots.includes(null) && p.hand.some(c => slotCost(p) + def(c.key).cost <= p.energy);
+    return { ok: false, msg: canAdd ? `點手牌排入格子（還要 ${need - filled} 張）` : `費用超出：這手牌可以排滿 ${need} 張，請調整` };
+  }
+  const supMissing = p.supports.filter(s => s.hand.length && !s.chosen).length;
+  if (supMissing) return { ok: false, msg: `點輔助卡，每位輔助選 1 張（還有 ${supMissing} 位）` };
+  return { ok: true, msg: filled < CONFIG.slots ? `手牌費用無法湊滿 ${CONFIG.slots} 張，可留空格` : '' };
 }
 
-// =====================================================================
-//  AI：合法出牌中隨機，偏好有組合銜接的排序
-// =====================================================================
+// ---------- 怪物 AI：合法出牌中隨機，偏好有組合銜接的排序 ----------
 function comboLinks(keys) {
   let s = 0;
   for (let i = 1; i < keys.length; i++) {
     const prev = def(keys[i - 1]), cur = def(keys[i]);
-    if (cur.combo && cur.combo.cond === 'prevHit' && prev.type !== 'defense') s++;
+    if (cur.combo && cur.combo.cond === 'prevHit' && (prev.type === 'attack' || prev.type === 'skill')) s++;
     if (cur.combo && cur.combo.cond === 'prevBlock' && prev.type === 'defense') s++;
     if (cur.combo && cur.combo.cond === 'prevDodge' && prev.type === 'dodge') s++;
     if (prev.onWinNextAttackBonus && cur.type === 'attack') s++;
@@ -438,8 +919,8 @@ function comboLinks(keys) {
   return s;
 }
 function aiChoose(p) {
-  const k = maxPlayable(p.hand);
-  const plays = orderedPlays(p.hand, k);
+  const energy = CONFIG.energyPerTurn;
+  const plays = orderedPlays(p.hand, maxPlayable(p.hand, energy), energy);
   if (!plays.length) return;
   const w = plays.map(pl => 1 + CONFIG.ai.comboWeight * comboLinks(pl.map(c => c.key)));
   let r = Math.random() * w.reduce((a, b) => a + b, 0), pick = plays[0];
@@ -452,11 +933,12 @@ function aiChoose(p) {
 // =====================================================================
 function newCtx() { return { prev: 'none', breakPen: 0, armed: 0, armedKey: null }; }
 function eff(p, key, ok) { const e = p.stats.eff[key] || (p.stats.eff[key] = { ok: 0, miss: 0 }); ok ? e.ok++ : e.miss++; }
+const POW_KEY = { attack: 'powAtk', skill: 'powSkl', defense: 'powDef' };
 
-// 計算某玩家在第 i 格的實際威力（並消耗破防、見切等暫存效果）
+// 計算某方在第 i 格的實際威力（並消耗破防、見切等暫存效果）
 function slotPower(pi, i, ctx) {
   const p = G.players[pi], c = p.slots[i], x = ctx[pi];
-  const info = { key: c ? c.key : null, base: 0, power: 0, parts: [], notes: [] };
+  const info = { key: c ? c.key : null, base: 0, power: 0, parts: [], notes: [], combo: false };
   if (!c) {
     if (x.armed) { eff(p, x.armedKey, false); info.notes.push(`${def(x.armedKey).name} 效果落空（本格為空）`); x.armed = 0; }
     x.breakPen = 0;
@@ -468,7 +950,7 @@ function slotPower(pi, i, ctx) {
   if (d.combo) {
     const cn = COND[d.combo.cond];
     if (i > 0 && condMet(d.combo.cond, x.prev)) {
-      pw += d.combo.bonus; info.parts.push(`<span class="ok">+${d.combo.bonus}（${cn} ✓）</span>`); eff(p, c.key, true);
+      pw += d.combo.bonus; info.combo = true; info.parts.push(`<span class="ok">+${d.combo.bonus}（${cn} ✓）</span>`); eff(p, c.key, true);
     } else {
       info.notes.push(`<span class="ng">${d.name} 組合落空：${i === 0 ? '位於第 1 格，條件永不成立' : `${cn} ✗（前格${{ hit: '是命中', block: '是擋下', dodge: '是閃避成功' }[x.prev] || '沒有命中、擋下或閃避'}）`}</span>`);
       eff(p, c.key, false);
@@ -476,9 +958,15 @@ function slotPower(pi, i, ctx) {
   }
   if (x.armed) {
     const an = def(x.armedKey).name;
-    if (d.type === 'attack') { pw += x.armed; info.parts.push(`<span class="ok">+${x.armed}（${an} 效果 ✓）</span>`); eff(p, x.armedKey, true); }
+    if (d.type === 'attack') { pw += x.armed; info.combo = true; info.parts.push(`<span class="ok">+${x.armed}（${an} 效果 ✓）</span>`); eff(p, x.armedKey, true); }
     else { info.notes.push(`<span class="ng">${an} 效果落空：本格不是攻擊卡</span>`); eff(p, x.armedKey, false); }
     x.armed = 0;
+  }
+  if (d.type !== 'dodge') {
+    const keys = ['powAll', POW_KEY[d.type]];
+    if (i === 0) keys.push('slot1');
+    if (p.hp <= p.maxHp / 2) keys.push('lowHpPow');
+    keys.forEach(k => { const m = modOf(p, k); if (m.n) { pw += m.n; info.parts.push(`${sg(m.n)}（${m.txt}）`); } });
   }
   if (x.breakPen) { pw -= x.breakPen; info.parts.push(`<span class="ng">−${x.breakPen}（被破防）</span>`); x.breakPen = 0; }
   info.power = Math.max(0, pw);
@@ -487,7 +975,7 @@ function slotPower(pi, i, ctx) {
 
 // 決定勝負：回傳 { w: 0|1|null, how, roll?, need? }
 function decide(a, b) {
-  const pa = G.players[0], pb = G.players[1];
+  const P = G.players;
   const ta = a.key && def(a.key).type, tb = b.key && def(b.key).type;
   if (!ta && !tb) return { w: null, how: 'bothEmpty' };
   if (ta === 'dodge' || tb === 'dodge') {
@@ -495,7 +983,7 @@ function decide(a, b) {
     const di = ta === 'dodge' ? 0 : 1, ot = di === 0 ? tb : ta, dd = def((di === 0 ? a : b).key);
     if (!ot || ot === 'defense') return { w: null, how: 'dodgeIdle' };
     if (ot === 'attack' || dd.dodgeSkill) {
-      const roll = Math.floor(Math.random() * 100) + 1, need = Math.round(dd.dodgeChance * 100);
+      const roll = Math.floor(Math.random() * 100) + 1, need = Math.min(95, Math.round(dd.dodgeChance * 100) + modOf(P[di], 'dodge').n);
       return roll <= need ? { w: di, how: 'dodge', roll, need } : { w: 1 - di, how: 'dodgeFail', roll, need };
     }
     return { w: 1 - di, how: 'vsDodge' };
@@ -513,26 +1001,50 @@ function decide(a, b) {
     return { w: a.power > b.power ? 0 : 1, how: 'diff' };
   }
   if (a.power !== b.power) return { w: a.power > b.power ? 0 : 1, how: 'power' };
-  if (pa.ch.speed !== pb.ch.speed) return { w: pa.ch.speed > pb.ch.speed ? 0 : 1, how: 'speed' };
+  if (P[0].speed !== P[1].speed) return { w: P[0].speed > P[1].speed ? 0 : 1, how: 'speed' };
   return { w: null, how: 'tie' };
 }
 
-// 造成傷害（命中與反擊共用）
+// 造成傷害：護甲、護盾 → 扣血 → 特效
 function dealDamage(W, L, key, dmg) {
+  const notes = [];
+  const armor = modOf(L, 'armor');
+  if (armor.n > 0 && dmg > 0) { const nd = Math.max(1, dmg - armor.n); if (nd < dmg) notes.push(`護甲 −${dmg - nd}（${armor.txt}）`); dmg = nd; }
+  if (L.shield > 0 && dmg > 0) { const a = Math.min(L.shield, dmg); L.shield -= a; dmg -= a; notes.push(`護盾吸收 ${a}`); fxFloat(L.idx, `🛡${a}`, 'shield', 16); }
   const before = L.hp;
   L.hp = Math.max(0, L.hp - dmg);
-  bump(W.stats.dmg, key, dmg); W.stats.dmgDealt += dmg;
-  G.flash.push(L.idx);
-  return { dmg, before };
+  if (key) bump(W.stats.dmg, key, dmg);
+  W.stats.dmgDealt += dmg;
+  L.stats.dmgTaken += dmg;
+  if (dmg > 0) { G.flash.push(L.idx); fxFloat(L.idx, `−${dmg}`, 'dmg', Math.min(52, 18 + dmg * 3)); fxShake(dmg); }
+  return { dmg, before, notes };
 }
-// 命中：記錄「前格命中」
+function healSide(p, n) {
+  const got = Math.max(0, Math.min(n, p.maxHp - p.hp));
+  p.hp += got;
+  if (got > 0) fxFloat(p.idx, `+${got}`, 'heal', 20);
+  return got;
+}
+// 命中：連擊數 +1、連擊加傷、吸血、荊棘
 function applyHit(W, L, key, base, ctx) {
   ctx[W.idx].prev = 'hit'; W.stats.hits++;
-  return dealDamage(W, L, key, base);
+  W.combo++; G.comboPop.push(W.idx);
+  if (W.isPlayer) RUN.maxCombo = Math.max(RUN.maxCombo, W.combo);
+  const extra = [];
+  let dmg = base;
+  const cd = modOf(W, 'comboDmg');
+  if (cd.n && W.combo >= 2) { dmg += cd.n * (W.combo - 1); extra.push(`${W.combo} 連擊 +${cd.n * (W.combo - 1)}（${cd.txt}）`); }
+  const h = dealDamage(W, L, key, dmg);
+  const ls = modOf(W, 'lifesteal');
+  if (ls.n && h.dmg > 0) { const g = healSide(W, ls.n); if (g) extra.push(`吸血回復 ${g}`); }
+  const th = modOf(L, 'thorns');
+  if (th.n) { const t = dealDamage(L, W, null, th.n); extra.push(`荊棘反彈 ${t.dmg}（${th.txt}）→ ${W.name} HP ${t.before} → ${W.hp}`); }
+  return { ...h, extra: [...h.notes, ...extra] };
 }
 
 function powerLine(p, info) {
   if (!info.key) return `<div>${p.name}：<span class="note">（空格）</span></div>`;
+  if (def(info.key).type === 'dodge') return `<div>${p.name}：${cardLabel(info.key)}</div>`;
   const tail = info.parts.length ? `${info.base} ${info.parts.join(' ')} = <b>${info.power}</b>` : `<b>${info.power}</b>`;
   return `<div>${p.name}：${cardLabel(info.key)} 威力 ${tail}</div>`;
 }
@@ -542,36 +1054,36 @@ function resolveSlot(i, ctx) {
   const infos = [slotPower(0, i, ctx), slotPower(1, i, ctx)];
   const r = decide(infos[0], infos[1]);
   G.slotPow[i] = [infos[0].power, infos[1].power];
+  G.slotGlow[i] = [infos[0].combo, infos[1].combo];
+  infos.forEach((inf, pi) => { if (inf.combo) fxFloat(pi, '組合！', 'info', 16); });
   const lines = [`<b>第 ${i + 1} 格</b>`, powerLine(P[0], infos[0]), powerLine(P[1], infos[1])];
   infos.forEach(inf => inf.notes.forEach(n => lines.push(`<div class="note">${n}</div>`)));
   const T = key => TYPES[def(key).type].label;
+  const hitBy = [false, false];
 
   let why = '', res = '', badge = { text: '無事', cls: 'none' };
   ctx[0].prev = ctx[1].prev = 'none';
-  // 帶「勝利時」效果的防禦卡，沒有以防禦勝利 → 效果落空
   const defWin = r.how === 'triangle' && def(infos[r.w].key).type === 'defense' ? r.w : -1;
   infos.forEach((inf, pi) => { if (inf.key && pi !== defWin) { const d = def(inf.key); if (d.counterOnWin != null || d.onWinNextAttackBonus) eff(P[pi], inf.key, false); } });
-  // 帶破防加成的技巧卡：有勝過防禦才算觸發
   const brkWin = r.how === 'triangle' && def(infos[r.w].key).type === 'skill' ? r.w : -1;
   infos.forEach((inf, pi) => { if (inf.key && def(inf.key).breakOnWin) eff(P[pi], inf.key, pi === brkWin); });
+  const ext = h => h.extra.length ? `（${h.extra.join('；')}）` : '';
 
   if (r.how === 'mutual') {
     why = `同為攻擊 → 互相傷害（威力 ${infos[0].power} 對 ${infos[1].power}）`;
     bump(G.matchups, '攻擊對攻擊（互相傷害）');
     const h0 = applyHit(P[0], P[1], infos[0].key, infos[0].power, ctx);
     const h1 = applyHit(P[1], P[0], infos[1].key, infos[1].power, ctx);
-    res = `→ 雙方互相命中！${P[1].name}受到 ${h0.dmg}，HP ${h0.before} → ${P[1].hp}；${P[0].name}受到 ${h1.dmg}，HP ${h1.before} → ${P[0].hp}`;
+    hitBy[0] = hitBy[1] = true;
+    res = `→ 雙方互相命中！${P[1].name}受到 ${h0.dmg}${ext(h0)}，HP ${h0.before} → ${P[1].hp}；${P[0].name}受到 ${h1.dmg}${ext(h1)}，HP ${h1.before} → ${P[0].hp}`;
     badge = { text: `互相命中<br>你 −${h1.dmg}・敵 −${h0.dmg}`, cls: 'mutual' };
   } else if (r.w === null) {
     const t = infos[0].key ? T(infos[0].key) : '';
     why = {
-      bothEmpty: '雙方皆為空格',
-      emptyDef: '一方空格、另一方是防禦 → 無事',
-      defdef: '防禦對防禦 → 一律無事',
-      tie: `同為${t}，威力相同（${infos[0].power}）且速度相同（${P[0].ch.speed}）→ 雙方無事`,
+      bothEmpty: '雙方皆為空格', emptyDef: '一方空格、另一方是防禦 → 無事', defdef: '防禦對防禦 → 一律無事',
+      tie: `同為${t}，威力相同（${infos[0].power}）且速度相同（${P[0].speed}）→ 雙方無事`,
       diffTie: `同為攻擊，威力相同（${infos[0].power}）→ 高減低為 0，雙方無事`,
-      dodgeBoth: '雙方都閃避 → 無事',
-      dodgeIdle: '閃避對上防禦或空格 → 無事',
+      dodgeBoth: '雙方都閃避 → 無事', dodgeIdle: '閃避對上防禦或空格 → 無事',
     }[r.how];
     res = '→ 雙方無事';
     bump(G.matchups, { defdef: '防禦對防禦（無事）', tie: '同類平手（無事）', diffTie: '攻擊對攻擊（威力相同，無事）', dodgeBoth: '閃避（無事）', dodgeIdle: '閃避（無事）' }[r.how] || '空格（無事）');
@@ -579,39 +1091,42 @@ function resolveSlot(i, ctx) {
     const W = P[r.w], L = P[1 - r.w], wi = infos[r.w], li = infos[1 - r.w], wd = def(wi.key), x = ctx[r.w];
     if (r.how === 'triangle') { why = `${T(wi.key)} 勝 ${T(li.key)}（相剋）`; bump(G.matchups, why); }
     else if (r.how === 'power') { why = `同為${T(wi.key)}，比威力：${wi.power} > ${li.power}`; bump(G.matchups, '同類比威力'); }
-    else if (r.how === 'speed') { why = `同為${T(wi.key)}且威力相同（${wi.power}），比速度：${W.ch.speed} > ${L.ch.speed}`; bump(G.matchups, '同類比速度'); }
+    else if (r.how === 'speed') { why = `同為${T(wi.key)}且威力相同（${wi.power}），比速度：${W.speed} > ${L.speed}`; bump(G.matchups, '同類比速度'); }
     else if (r.how === 'diff') { why = `同為攻擊，高減低：${wi.power} − ${li.power} = ${wi.power - li.power}`; bump(G.matchups, '攻擊對攻擊（高減低）'); }
     else if (r.how === 'dodge') { why = `${L.name}出${T(li.key)}，${W.name}閃避擲骰 🎲 ${r.roll}（≤ ${r.need} 成功）`; bump(G.matchups, '閃避成功'); }
     else if (r.how === 'dodgeFail') { why = `${W.name}出${T(wi.key)}，${L.name}閃避擲骰 🎲 ${r.roll}（> ${r.need} 失敗）`; bump(G.matchups, '閃避失敗'); }
-    else if (r.how === 'vsDodge') { why = `技巧對閃避（此設定下閃避躲不了技巧）→ 命中`; bump(G.matchups, '技巧命中閃避'); }
+    else if (r.how === 'vsDodge') { why = `技巧對閃避（這張閃避躲不了技巧）→ 命中`; bump(G.matchups, '技巧命中閃避'); }
     else { why = `${L.name} 空格，${W.name} 直接命中`; bump(G.matchups, '對空格命中'); }
 
     if (r.how === 'dodge') {
       x.prev = 'dodge'; W.stats.dodges++; eff(W, wi.key, true);
+      fxFloat(W.idx, '閃避！', 'info', 20);
       res = `→ ${W.name}閃避成功！完全不受傷`;
       badge = { text: `${W.name}閃避成功<br>🎲 ${r.roll}`, cls: 'win' + r.w };
     } else if (wd.type === 'defense') {
-      // 擋下：不受傷，反擊（反擊不算命中）
       const parts = [];
       const base = wd.counterOnWin != null ? wd.counterOnWin : CONFIG.baseCounter;
       parts.push(wd.counterOnWin != null ? `${wd.name} 反擊 ${base}` : `基本反擊 ${base}`);
       let dmg = base;
       if (wd.counterOnWin != null) eff(W, wi.key, true);
+      const cm = modOf(W, 'counter');
+      if (cm.n) { dmg += cm.n; parts.push(cm.txt); }
       if (wd.onWinNextAttackBonus) {
         x.armed = wd.onWinNextAttackBonus; x.armedKey = wi.key;
         parts.push(`<span class="ok">${wd.name}：下一格攻擊卡威力 +${wd.onWinNextAttackBonus}</span>`);
       }
       x.prev = 'block'; W.stats.blocks++;
+      fxFloat(W.idx, '擋下！', 'info', 20);
       const h = dealDamage(W, L, wi.key, dmg);
-      res = `→ ${W.name}擋下！不受傷，反擊 ${dmg} 傷害（${parts.join('，')}）。${L.name} HP ${h.before} → ${L.hp}`;
-      badge = { text: `${W.name}擋下<br>反擊 ${dmg}`, cls: 'win' + r.w };
+      res = `→ ${W.name}擋下！不受傷，反擊 ${h.dmg} 傷害（${[...parts, ...h.notes].join('，')}）。${L.name} HP ${h.before} → ${L.hp}`;
+      badge = { text: `${W.name}擋下<br>反擊 ${h.dmg}`, cls: 'win' + r.w };
     } else {
-      // 命中
       if (r.how === 'dodgeFail') eff(L, li.key, false);
       const base = r.how === 'diff' ? wi.power - li.power : wi.power;
       const h = applyHit(W, L, wi.key, base, ctx);
-      res = `→ ${W.name}命中！${L.name}受到 ${h.dmg} 傷害（${r.how === 'diff' ? '威力差' : '威力'} ${base}）`;
-      badge = { text: `${W.name}命中<br>−${h.dmg}${r.how === 'dodgeFail' ? '<br>閃避失敗' : ''}`, cls: 'win' + r.w };
+      hitBy[r.w] = true;
+      res = `→ ${W.name}命中！${L.name}受到 ${h.dmg} 傷害（${r.how === 'diff' ? '威力差' : '威力'} ${base}${h.extra.length ? '；' + h.extra.join('；') : ''}）`;
+      badge = { text: `${W.name}命中<br>−${h.dmg}${W.combo >= 2 ? `<br>${W.combo} 連擊` : ''}${r.how === 'dodgeFail' ? '<br>閃避失敗' : ''}`, cls: 'win' + r.w };
       if (wd.type === 'skill' && r.how === 'triangle') {
         const brk = wd.breakOnWin || CONFIG.breakPenalty;
         ctx[1 - r.w].breakPen += brk; W.stats.breaks++;
@@ -621,208 +1136,332 @@ function resolveSlot(i, ctx) {
       res += `。${L.name} HP ${h.before} → ${L.hp}`;
     }
   }
-  const dead = P.filter(p => p.hp <= 0);
-  if (dead.length) { G.over = true; G.winner = dead.length === 2 ? -1 : 1 - dead[0].idx; }
+  // 連擊：命中 +1（在 applyHit 裡）；擋下、閃避成功維持；其他情況中斷
+  P.forEach((p, pi) => {
+    if (hitBy[pi] || ctx[pi].prev === 'block' || ctx[pi].prev === 'dodge') return;
+    if (p.combo >= 2) { lines.push(`<div class="note">${p.name}的 ${p.combo} 連擊中斷</div>`); fxFloat(pi, '連擊中斷', 'info', 13); }
+    p.combo = 0;
+  });
   lines.push(`<div class="why">⚖ ${why}</div>`, `<div class="res">${res}</div>`);
+  if (P[0].combo >= 2) lines.push(`<div class="ok">🔥 ${P[0].combo} 連擊</div>`);
   log(`<div class="le">${lines.join('')}</div>`);
   G.slotRes[i] = badge;
+  checkOver();
+}
+function checkOver() {
+  const [P, E] = G.players;
+  if (E.hp <= 0) {
+    if (P.hp <= 0) { P.hp = 1; log(`<div class="le sys">同歸於盡的一擊！你以 1 HP 撐住了。</div>`); }
+    G.over = true; G.winner = 0;
+  } else if (P.hp <= 0) { G.over = true; G.winner = 1; }
+}
+
+// 輔助卡：掀開並套用（本回合效果放進 roundSrc）
+function applySupport(s) {
+  const [P, E] = G.players, card = sdef(s.chosen.key), m = card.mods, out = [];
+  bump(P.stats.sup, s.chosen.key);
+  if (m.heal) out.push(`回復 ${healSide(P, m.heal)}（HP ${P.hp}）`);
+  if (m.shield) { P.shield += m.shield; out.push(`護盾 +${m.shield}`); fxFloat(0, `🛡+${m.shield}`, 'shield', 18); }
+  if (m.dmg) { const h = dealDamage(P, E, null, m.dmg); P.stats.supDmg += h.dmg; out.push(`直接造成 ${h.dmg} 傷害${h.notes.length ? `（${h.notes.join('；')}）` : ''}，${E.title} HP ${h.before} → ${E.hp}`); }
+  if (m.selfDmg) { const b = P.hp; P.hp = Math.max(1, P.hp - m.selfDmg); if (b > P.hp) fxFloat(0, `−${b - P.hp}`, 'dmg', 20); out.push(`自己失去 ${b - P.hp} HP`); }
+  if (m.weaken) { E.roundSrc.push({ name: card.name, mods: { powAll: -m.weaken } }); out.push(`敵方本回合所有威力 −${m.weaken}`); }
+  const buff = {};
+  ['powAll', 'powAtk', 'powSkl', 'powDef', 'slot1', 'counter', 'dodge'].forEach(k => { if (m[k]) buff[k] = m[k]; });
+  if (Object.keys(buff).length) { P.roundSrc.push({ name: card.name, mods: buff }); out.push(`本回合 ${modText(buff)}`); }
+  log(`<div class="le sup">🤝 輔助｜${s.name}：${supLabel(s.chosen.key)} → ${out.join('；')}</div>`);
 }
 
 async function reveal() {
   G.phase = 'reveal';
-  const g = G;
+  const g = G, [P, E] = G.players;
   const ctx = [newCtx(), newCtx()];
-  log(`<div class="le sys">雙方鎖定。你：${G.players[0].slots.map(c => c ? def(c.key).name : '空').join(' → ')} ｜ 對手：（逐格翻開）</div>`);
-  for (let i = 0; i < CONFIG.slots; i++) {
+  log(`<div class="le sys">鎖定。你：${P.slots.map(c => c ? def(c.key).name : '空').join(' → ')}${P.supports.length ? `｜輔助：${P.supports.map(s => s.chosen ? sdef(s.chosen.key).name : '無').join('、')}` : ''}</div>`);
+  // 輔助卡先掀開
+  const sups = P.supports.filter(s => s.chosen);
+  if (sups.length) {
+    G.supFlip = true; render(); G.supFlip = false;
+    for (const s of sups) {
+      await sleep(CONFIG.ui.supportDelay); if (G !== g) return;
+      applySupport(s); s.glow = true; checkOver(); render(); s.glow = false;
+      if (G.over) break;
+    }
+    await sleep(CONFIG.ui.supportDelay); if (G !== g) return;
+  }
+  if (!G.over) for (let i = 0; i < CONFIG.slots; i++) {
     G.active = i; G.revealed[i] = true; G.anim = i; render();
-    await sleep(CONFIG.ui.flipDelay);
-    if (G !== g) return;  // 中途回選單或重開
+    await sleep(CONFIG.ui.flipDelay); if (G !== g) return;
     resolveSlot(i, ctx); render();
     if (G.over) break;
-    await sleep(CONFIG.ui.slotDelay);
-    if (G !== g) return;
+    await sleep(CONFIG.ui.slotDelay); if (G !== g) return;
   }
   if (!G.over) {
     ctx.forEach((x, pi) => { if (x.armed) { eff(G.players[pi], x.armedKey, false); log(`<div class="le sys">${G.players[pi].name}的 ${def(x.armedKey).name} 效果落空（已是最後一格）</div>`); } });
+    [P, E].forEach(p => { const rg = modOf(p, 'regen'); if (rg.n) { const got = healSide(p, rg.n); if (got) log(`<div class="le sys">${p.title} 回復 ${got}（${rg.txt}），HP ${p.hp}</div>`); } });
   }
-  G.players.forEach(p => { p.slots.forEach(c => c && p.discard.push(c)); });
+  [P, E].forEach(p => { p.slots.forEach(c => c && p.discard.push(c)); });
+  P.supports.forEach(s => { if (s.chosen) s.discard.push(s.chosen); });
   G.active = -1;
   if (G.over) {
     G.phase = 'over';
-    log(`<div class="le turn">${resultText()}（第 ${G.turn} 回合）</div>`);
-    render();
-    await sleep(900);
-    if (G === g) showStats();
-  } else {
-    G.phase = 'end';
-    render();
-  }
+    log(`<div class="le turn">${G.winner === 0 ? `擊敗 ${E.title}！` : `${P.title} 倒下了……`}（第 ${G.turn} 回合）</div>`);
+  } else G.phase = 'end';
+  render();
+}
+
+// ---------- 戰鬥結束 ----------
+function finishBattle() {
+  const [P] = G.players;
+  const c = mainChar();
+  c.hp = P.hp;
+  mergeStats(RUN.stats, P.stats);
+  RUN.buffs.forEach(b => b.left--);
+  RUN.buffs = RUN.buffs.filter(b => b.left > 0);
+  if (G.winner === 1) return endRun(false);
+  const kind = G.kind;
+  const kh = modOf(P, 'killHeal');
+  const healMsg = kh.n ? `${kh.txt}：回復 ${healChar(c, kh.n)} HP。<br>` : '';
+  const statsBtn = `<div class="row"><button onclick="showBattleStats()">查看本場統計</button></div>`;
+  const back = () => kind === 'boss' ? mapCleared() : showMap();
+  if (kind === 'monster') upgradeChoices('勝利！', healMsg, back, statsBtn);
+  else equipChoices(kind === 'boss' ? '👑 擊敗王！' : '💀 擊敗精英！', healMsg, back, statsBtn);
+}
+function mapCleared() {
+  if (RUN.mapState.mi >= CONFIG.maps.length - 1) return endRun(true);
+  const txt = healAll(CONFIG.mapClearHeal);
+  const pool = Object.keys(CONFIG.characters).filter(k => !RUN.party.some(c => c.key === k));
+  choiceModal('🏁 地圖完成！招募夥伴', `全隊回復 ${Math.round(CONFIG.mapClearHeal * 100)}%：${txt}<br>角色池 ${pool.length} 位中隨機抽 3 位，選 1 位加入隊伍。`,
+    pickN(pool, 3).map(k => { const ch = CONFIG.characters[k]; return { title: `${ch.name}（HP ${ch.hp}・速度 ${ch.speed}）`,
+      desc: `${ch.cards.map(cardLine).join('<br>')}<br>${ch.support.map(supLine).join('<br>')}`,
+      fn: () => { RUN.party.push(newCharState(k)); log(`<div class="le sys">${ch.name} 加入隊伍</div>`); chooseMain(); } }; }));
+}
+function chooseMain() {
+  choiceModal('選擇主角', '主角出 3 張戰鬥卡、承受傷害；其他人當輔助，每回合各出 1 張輔助卡。',
+    RUN.party.map((c, i) => ({ title: `${c.ch.name}${i === RUN.main ? '（目前主角）' : ''}`, desc: `HP ${c.hp}/${charMaxHp(c)}・速度 ${charSpeed(c)}${c.upNames.length ? '・提升：' + c.upNames.join('、') : ''}`,
+      fn: () => { RUN.main = i; RUN.mapState = genMap(RUN.mapState.mi + 1); log(`<div class="le battle">進入地圖 ${RUN.mapState.mi + 1}：${CONFIG.maps[RUN.mapState.mi].name}｜主角 ${c.ch.name}</div>`); showMap(); } })));
+}
+function endRun(won) {
+  RUN.over = true; RUN.won = won;
+  log(`<div class="le battle">${won ? '🏆 通關！' : '💀 冒險失敗'}｜${RUN.history.join(' → ')}</div>`);
+  showRunSummary();
 }
 
 // =====================================================================
-//  介面
+//  特效（畫面回饋）
+// =====================================================================
+function fxFloat(idx, text, cls, size) {
+  const f = $('#fighter' + idx), wrap = $('#arenaWrap');
+  if (!f || $('#gameScreen').classList.contains('hidden')) return;
+  const fr = f.getBoundingClientRect(), wr = wrap.getBoundingClientRect();
+  const el = document.createElement('div');
+  el.className = `float ${cls}`; el.textContent = text; el.style.fontSize = size + 'px';
+  el.style.left = (fr.left - wr.left + fr.width / 2 + (Math.random() * 24 - 12)) + 'px';
+  el.style.top = (fr.top - wr.top + fr.height * 0.4 + (Math.random() * 30 - 15)) + 'px';
+  $('#fx').appendChild(el);
+  setTimeout(() => el.remove(), 1200);
+}
+function fxShake(dmg) {
+  if (dmg < CONFIG.ui.bigHit) return;
+  const w = $('#arenaWrap'); w.classList.remove('shake1', 'shake2'); void w.offsetWidth;
+  w.classList.add(dmg >= CONFIG.ui.bigHit * 2 ? 'shake2' : 'shake1');
+}
+
+// =====================================================================
+//  戰鬥介面
 // =====================================================================
 function log(html) { const el = $('#log'); el.insertAdjacentHTML('beforeend', html); el.scrollTop = el.scrollHeight; }
-
-function hpBoxHTML(p, cls) {
+function hpBoxHTML(p) {
   const pct = Math.max(0, p.hp / p.maxHp * 100);
-  return `<div class="hpbox" style="grid-column:${cls === 'me' ? 2 : 3}">HP ${p.hp}/${p.maxHp}
+  return `<div class="hpbox" style="grid-column:${p.idx === 0 ? 2 : 3}">HP ${p.hp}/${p.maxHp}${p.shield ? ` 🛡${p.shield}` : ''}
     <div class="hpwrap"><div class="hpfill ${pct <= 30 ? 'low' : ''}" style="width:${pct}%"></div></div></div>`;
 }
-function fighterHTML(p, cls) {
-  return `<div class="fighter ${cls} ${G.flash.includes(p.idx) ? 'flash' : ''} ${p.hp <= 0 ? 'dead' : ''}" onclick="showChar(${p.idx})">
-    <div class="glyph">${p.ch.name[0]}</div><div class="fn">${p.name === '你' ? '我方' : '敵方'}</div><div class="fn">${p.ch.name}</div><div class="fn">速 ${p.ch.speed}</div></div>`;
+function fighterHTML(p) {
+  const combo = p.combo >= 2 ? `<div class="combo ${G.comboPop.includes(p.idx) ? 'pop' : ''}" style="font-size:${Math.min(20, 9 + p.combo * 2)}px">${p.combo} 連擊</div>` : '';
+  const tr = p.isPlayer ? '' : modText(p.traits).replace(/，/g, '<br>');
+  const role = p.isPlayer ? '主角' : G.kind === 'boss' ? '王' : G.kind === 'elite' ? '精英' : '怪物';
+  return `<div id="fighter${p.idx}" class="fighter ${p.isPlayer ? 'me' : 'op'} ${G.flash.includes(p.idx) ? 'flash' : ''} ${p.hp <= 0 ? 'dead' : ''}" onclick="showFighter(${p.idx})">${combo}
+    <div class="glyph">${p.isPlayer ? p.title[0] : p.icon}</div><div class="fn">${role}</div>
+    <div class="fn">${p.isPlayer ? p.title : p.title.replace('精英', '')}</div><div class="fn">速 ${p.speed}</div>${tr ? `<div class="tr">${tr}</div>` : ''}</div>`;
 }
-
 function render() {
   if (!G) return;
   const [me, op] = G.players;
-  $('#turnLbl').textContent = `第 ${G.turn} 回合`;
-  $('#speedBtn').textContent = G.fast ? '速度 快' : '速度 1x';
+  $('#turnLbl').textContent = `地圖${RUN.mapState.mi + 1}・第${RUN.mapState.pos.s + 1}步・第 ${G.turn} 回合`;
+  $('#speedBtn').textContent = fast ? '速度 快' : '速度 1x';
 
-  // 戰場
   let b = `<div class="colhdr" style="grid-column:1;grid-row:1"><b>我方出牌</b><br>庫 ${me.deck.length}・棄 ${me.discard.length}</div>
-    ${hpBoxHTML(me, 'me')}${hpBoxHTML(op, 'op')}
+    ${hpBoxHTML(me)}${hpBoxHTML(op)}
     <div class="colhdr" style="grid-column:4;grid-row:1"><b>敵方出牌</b><br>手 ${op.hand.length}・庫 ${op.deck.length}・棄 ${op.discard.length}</div>
-    ${fighterHTML(me, 'me')}${fighterHTML(op, 'op')}`;
+    ${fighterHTML(me)}${fighterHTML(op)}`;
   for (let i = 0; i < CONFIG.slots; i++) {
     const oc = op.slots[i], mc = me.slots[i], rv = G.revealed[i], pw = G.slotPow[i], row = i + 2, act = G.active === i ? 'active' : '';
+    const gl = G.slotGlow[i] || [false, false];
+    const tag = on => on ? `<span class="ctag">組合！</span>` : '';
     let oHTML;
     if (G.phase === 'select') oHTML = `<div class="card back">?</div>`;
     else if (!rv) oHTML = oc ? `<div class="card back">?</div>` : `<div class="card empty">空</div>`;
-    else oHTML = oc ? cardHTML(oc.key, G.anim === i ? 'flip' : '', pw ? `<span class="final">${pw[1]}</span>` : '') : `<div class="card empty">空</div>`;
-    const mHTML = mc ? cardHTML(mc.key, '', pw ? `<span class="final">${pw[0]}</span>` : '') : `<div class="card empty">${G.phase === 'select' ? `第 ${i + 1} 格` : '空'}</div>`;
+    else oHTML = oc ? cardHTML(oc.key, (G.anim === i ? 'flip ' : '') + (gl[1] ? 'glow' : ''), (pw ? `<span class="final">${pw[1]}</span>` : '') + tag(gl[1])) : `<div class="card empty">空</div>`;
+    const mHTML = mc ? cardHTML(mc.key, gl[0] ? 'glow' : '', (pw ? `<span class="final">${pw[0]}</span>` : '') + tag(gl[0])) : `<div class="card empty">${G.phase === 'select' ? `第 ${i + 1} 格` : '空'}</div>`;
     b += `<div class="slot ${act}" data-slot="${i}" style="grid-column:1;grid-row:${row}">${mHTML}</div>
       <div class="slot ${act}" style="grid-column:4;grid-row:${row}">${oHTML}</div>`;
     const res = G.slotRes[i];
     if (res) b += `<div class="badge rowbadge ${res.cls}" style="grid-row:${row}">${res.text}</div>`;
   }
   $('#board').innerHTML = b;
-  G.anim = -1; G.flash = [];
+  G.anim = -1; G.flash = []; G.comboPop = [];
 
-  const used = slotCost(me), left = CONFIG.energyPerTurn - used;
-  $('#energy').innerHTML = `能量 <b>${'●'.repeat(Math.max(0, left))}${'○'.repeat(Math.min(CONFIG.energyPerTurn, used))}</b> ${left}/${CONFIG.energyPerTurn}`;
+  // 輔助：選牌時顯示手牌，鎖定後只顯示掀開的那張
+  $('#supports').innerHTML = me.supports.map((s, si) => {
+    let cards;
+    if (G.phase === 'select') cards = s.hand.map(c => `<div data-sup="${si}" data-suid="${c.uid}">${supCardHTML(c.key, s.chosen === c ? 'sel' : '')}</div>`).join('');
+    else cards = s.chosen ? `<div style="grid-column: span 4">${supCardHTML(s.chosen.key, (G.supFlip ? 'flip ' : '') + (s.glow ? 'glow' : ''))}</div>` : `<div class="card empty" style="grid-column: span 4">沒有出牌</div>`;
+    return `<div class="suprow"><div class="supname">${s.name}<small>輔助</small></div>${cards}</div>`;
+  }).join('');
 
-  // 手牌
+  const used = slotCost(me), left = me.energy - used;
+  $('#energy').innerHTML = `能量 <b>${'●'.repeat(Math.max(0, left))}${'○'.repeat(Math.max(0, used))}</b> ${left}/${me.energy}`;
   $('#hand').innerHTML = me.hand.map(c => {
     const dim = G.phase !== 'select' || def(c.key).cost > left || !me.slots.includes(null);
     return `<div data-uid="${c.uid}">${cardHTML(c.key, dim ? 'dim' : '')}</div>`;
   }).join('');
 
-  // 按鈕
   const btn = $('#actBtn'), hint = $('#hint');
   if (G.phase === 'select') {
     const ls = lockState(me);
     btn.disabled = !ls.ok; btn.textContent = '鎖定出牌'; hint.textContent = ls.msg || '點格子中的卡可收回';
-  } else if (G.phase === 'reveal') {
-    btn.disabled = true; btn.textContent = '翻牌結算中…'; hint.textContent = '';
-  } else if (G.phase === 'end') {
-    btn.disabled = false; btn.textContent = '下一回合 ▶'; hint.textContent = '可往下查看戰鬥紀錄';
-  } else {
-    btn.disabled = false; btn.textContent = '查看對局統計'; hint.textContent = resultText();
-  }
+  } else if (G.phase === 'reveal') { btn.disabled = true; btn.textContent = '翻牌結算中…'; hint.textContent = ''; }
+  else if (G.phase === 'end') { btn.disabled = false; btn.textContent = '下一回合 ▶'; hint.textContent = '可往下查看戰鬥紀錄'; }
+  else { btn.disabled = false; btn.textContent = G.winner === 0 ? '領取獎勵 ▶' : '查看結果'; hint.textContent = G.winner === 0 ? '勝利！' : '主角倒下了'; }
 }
 
 $('#hand').addEventListener('click', e => {
-  const el = e.target.closest('[data-uid]'); if (!el || G.phase !== 'select') return;
+  const el = e.target.closest('[data-uid]'); if (!el || !G || G.phase !== 'select') return;
   const me = G.players[0], c = me.hand.find(c => c.uid === +el.dataset.uid);
   const si = me.slots.indexOf(null);
   if (si < 0) return toast('三格已滿，點格子中的卡可收回');
-  if (slotCost(me) + def(c.key).cost > CONFIG.energyPerTurn) return toast('能量不足');
+  if (slotCost(me) + def(c.key).cost > me.energy) return toast('能量不足');
   me.hand.splice(me.hand.indexOf(c), 1); me.slots[si] = c; render();
 });
 $('#board').addEventListener('click', e => {
-  const el = e.target.closest('[data-slot]'); if (!el || G.phase !== 'select') return;
+  const el = e.target.closest('[data-slot]'); if (!el || !G || G.phase !== 'select') return;
   const me = G.players[0], i = +el.dataset.slot;
   if (me.slots[i]) { me.hand.push(me.slots[i]); me.slots[i] = null; render(); }
 });
-$('#actBtn').addEventListener('click', () => {
-  if (G.phase === 'select') { if (!lockState(G.players[0]).ok) return; aiChoose(G.players[1]); reveal(); }
-  else if (G.phase === 'end') newTurn();
-  else if (G.phase === 'over') showStats();
+$('#supports').addEventListener('click', e => {
+  const el = e.target.closest('[data-suid]'); if (!el || !G || G.phase !== 'select') return;
+  const s = G.players[0].supports[+el.dataset.sup], c = s.hand.find(c => c.uid === +el.dataset.suid);
+  s.chosen = s.chosen === c ? null : c;
+  render();
 });
+$('#actBtn').addEventListener('click', () => {
+  if (!G) return;
+  if (G.phase === 'select') {
+    const me = G.players[0];
+    if (!lockState(me).ok) return;
+    me.supports.forEach(s => { if (s.chosen) s.hand.splice(s.hand.indexOf(s.chosen), 1); });
+    aiChoose(G.players[1]); reveal();
+  } else if (G.phase === 'end') newTurn();
+  else if (G.phase === 'over') finishBattle();
+});
+function toggleSpeed() { fast = !fast; render(); }
 
-function toggleSpeed() { if (G) { G.fast = !G.fast; render(); } }
-
-// ---------- 彈窗 ----------
-function openModal(html) { $('#mbox').innerHTML = html; $('#modal').classList.remove('hidden'); }
-function closeModal() { $('#modal').classList.add('hidden'); edit = null; }
-
-function pileHTML(cards) {
-  if (!cards.length) return '<div class="note" style="color:var(--muted)">（空）</div>';
+// ---------- 資訊彈窗 ----------
+function pileHTML(cards, sup) {
+  if (!cards.length) return '<div class="muted" style="font-size:12px">（空）</div>';
   const cnt = {}; cards.forEach(c => bump(cnt, c.key));
-  return `<div class="pile">${Object.keys(cnt).map(k => `<span class="chip ${def(k).type}">${def(k).name} ×${cnt[k]}</span>`).join('')}</div>`;
+  return `<div class="pile">${Object.keys(cnt).map(k => sup ? `<span class="chip support">${sdef(k).name} ×${cnt[k]}</span>` : `<span class="chip ${def(k).type}">${def(k).name} ×${cnt[k]}</span>`).join('')}</div>`;
 }
 function showPiles() {
   if (!G) return;
   const [me, op] = G.players;
   openModal(`<h3>棄牌堆（公開資訊）</h3>
-    <h4>對手（${op.ch.name}）棄牌 ${op.discard.length} 張・牌庫 ${op.deck.length} 張</h4>${pileHTML(op.discard)}
-    <h4>你（${me.ch.name}）棄牌 ${me.discard.length} 張・牌庫 ${me.deck.length} 張</h4>${pileHTML(me.discard)}
-    <h4>你的牌庫剩餘內容（順序未知）</h4>${pileHTML(me.deck)}
+    <h4>${op.title} 棄牌 ${op.discard.length}・牌庫 ${op.deck.length}</h4>${pileHTML(op.discard)}
+    <h4>你（${me.title}）棄牌 ${me.discard.length}・牌庫 ${me.deck.length}</h4>${pileHTML(me.discard)}
+    <h4>你的牌庫剩餘（順序未知）</h4>${pileHTML(me.deck)}
+    ${me.supports.map(s => `<h4>輔助 ${s.name}：棄牌</h4>${pileHTML(s.discard, true)}`).join('')}
     <div class="row"><button class="pri" onclick="closeModal()">關閉</button></div>`);
 }
-
-function showChar(pi) {
-  const p = G.players[pi], ch = p.ch;
-  openModal(`<h3>${p.name === '你' ? '我方' : '敵方'}：${ch.name}</h3>
-    <div>HP ${p.hp}/${p.maxHp}・速度 ${ch.speed}</div>
-    <h4>專屬卡</h4><ul>${ch.cards.map(k => `<li>${cardLine(k)}</li>`).join('')}</ul>
-    <h4>牌組（${deckCount(p.deckCounts)} 張）</h4><div>${deckSummary(p.deckCounts)}</div>
+function showFighter(idx) {
+  const p = G.players[idx];
+  if (p.isPlayer) return showCharInfo(RUN.main, p);
+  openModal(`<h3>${p.icon} ${p.title}</h3><div>HP ${p.hp}/${p.maxHp}・速度 ${p.speed}</div>
+    ${p.src.length ? `<h4>加成</h4><div style="font-size:12px">${p.src.map(s => `${s.name}：${modText(s.mods)}`).join('<br>')}</div>` : ''}
+    <h4>牌組（${deckCount(p.deckCounts)} 張）</h4><div style="font-size:12px">${p.deckKeys.map(k => `${cardLine(k)} ×${p.deckCounts[k]}`).join('<br>')}</div>
     <div class="row"><button class="pri" onclick="closeModal()">關閉</button></div>`);
 }
-
-function cardLine(k) { const d = def(k); return `${cardLabel(k)} 費${d.cost}｜${d.dodgeChance != null ? `閃避率 ${Math.round(d.dodgeChance * 100)}%` : `威力${d.power}`}${effText(d) ? '｜' + effText(d) : ''}`; }
-
+function showCharInfo(i, side) {
+  const c = RUN.party[i];
+  openModal(`<h3>${c.ch.name}（${i === RUN.main ? '主角' : '輔助'}）</h3>
+    <div>HP ${c.hp}/${charMaxHp(c)}・速度 ${charSpeed(c)}</div>
+    <div>提升：${c.upNames.length ? c.upNames.join('、') + `（${modText(c.ups)}）` : '無'}</div>
+    ${side && side.src.length ? `<h4>本場加成</h4><div style="font-size:12px">${side.src.map(s => `${s.name}：${modText(s.mods)}`).join('<br>')}</div>` : ''}
+    <h4>戰鬥牌組（${deckCount(c.battle)} 張）</h4><div style="font-size:12px">${deckSummary('battle', c.battle)}</div>
+    <h4>輔助牌組（${deckCount(c.support)} 張）</h4><div style="font-size:12px">${deckSummary('support', c.support)}</div>
+    <h4>專屬卡</h4><div style="font-size:12px">${c.ch.cards.map(cardLine).join('<br>')}<br>${c.ch.support.map(supLine).join('<br>')}</div>
+    <div class="row"><button class="pri" onclick="closeModal()">關閉</button></div>`);
+}
+function showRunDecks() {
+  openModal(`<h3>隊伍牌組</h3>${RUN.party.map(c => `<h4>${c.ch.name}</h4><div style="font-size:12px">戰鬥：${deckSummary('battle', c.battle)}<br>輔助：${deckSummary('support', c.support)}</div>`).join('')}
+    <div class="row"><button class="pri" onclick="closeModal()">關閉</button></div>`);
+}
 function showRules() {
   const C = CONFIG;
-  const cardRow = k => `<li>${cardLine(k)}</li>`;
-  openModal(`<h3>規則</h3><div class="rules">
-    <ul><li>自組牌庫 ${C.deckSize} 張：通用卡＋自己角色的 2 種專屬卡，每種最多 ${C.maxCopies} 張。開局抽 ${C.handSize}，每回合補到 ${C.handSize}。牌庫空了洗棄牌堆。</li>
-    <li>角色之間只有 HP 和速度的差別（速度用在同類型比威力平手時）。</li>
-    <li>每回合 ${C.energyPerTurn} 能量，選 ${C.slots} 張排入 1～${C.slots} 格（總費用 ≤ ${C.energyPerTurn}），鎖定後依序逐格翻開對決。</li>
-    <li><span class="tA">攻擊</span> 勝 <span class="tS">技巧</span>：命中，造成威力傷害。</li>
-    <li><span class="tS">技巧</span> 勝 <span class="tD">防禦</span>：命中，造成威力傷害，且對手下一格威力 −${C.breakPenalty}（破防）。</li>
-    <li><span class="tD">防禦</span> 勝 <span class="tA">攻擊</span>：不受傷，反擊 ${C.baseCounter}（擋下）。</li>
-    <li>攻擊對攻擊（目前：${CLASH[C.attackClash]}）：${{ higher: '威力高者命中，造成自己的威力傷害；平手比速度，再平手無事', mutual: '雙方都算命中，各自受到對方威力的傷害', diff: '威力高者命中，傷害為威力差；威力相同則無事' }[C.attackClash]}。</li>
-    <li>技巧對技巧：威力高者命中；平手比速度；再平手無事。防禦對防禦一律無事。</li>
-    <li><span class="tG">閃避</span>不在相剋內：對手出攻擊（或技巧，看卡牌）時擲骰，成功完全不受傷，失敗則被命中；對上防禦、閃避或空格則無事。</li>
-    <li>組合條件看自己前一格：「前格命中」／「前格擋下」／「前格閃避成功」。第 1 格的組合永遠不成立。</li></ul>
-    <h4>通用卡</h4><ul>${C.commonCards.map(cardRow).join('')}</ul>
-    ${Object.values(C.characters).map(ch => `<h4>${ch.name}：HP ${ch.hp}・速度 ${ch.speed}</h4><ul>${ch.cards.map(cardRow).join('')}</ul>`).join('')}
+  openModal(`<h3>規則</h3><div class="rules"><ul>
+    <li>冒險：${C.maps.length} 張地圖，每張 ${C.mapGen.steps} 步、${C.mapGen.lanes} 條路線，最後一步打王。主角 HP 歸零就失敗。</li>
+    <li>每打完一張地圖，從角色池隨機 3 位選 1 位加入，並重新決定誰當主角。</li>
+    <li>主角：手牌 ${C.handSize}，每回合 ${C.energyPerTurn} 能量，選 ${C.slots} 張排入 1～${C.slots} 格。</li>
+    <li>輔助：手牌 ${C.supportHandSize}，每回合各出 1 張輔助卡，在翻牌前先掀開，效果只持續本回合。</li>
+    <li><span class="tA">攻擊</span> 勝 <span class="tS">技巧</span>：命中。<span class="tS">技巧</span> 勝 <span class="tD">防禦</span>：命中＋破防（對手下一格威力 −${C.breakPenalty}）。<span class="tD">防禦</span> 勝 <span class="tA">攻擊</span>：擋下，反擊 ${C.baseCounter}。</li>
+    <li>攻擊對攻擊（目前：${CLASH[C.attackClash]}）。技巧對技巧比威力，平手比速度。防禦對防禦無事。</li>
+    <li><span class="tG">閃避</span>不在相剋內：被攻擊（或技巧，看卡牌）時擲骰，成功完全不受傷，失敗被命中。</li>
+    <li>組合條件看自己前一格：前格命中／擋下／閃避成功。第 1 格的組合永遠不成立。</li>
+    <li>連擊：每次命中 +1，擋下或閃避成功維持，其他情況中斷；跨回合累積。</li>
+    <li>成長：普通戰鬥勝利 → 主角提升（三選一，永久）；精英、寶箱、王 → 裝備（三選一，全隊共用）；祝福 → 持續 ${C.buffBattles} 場。</li>
+    <li>組牌：戰鬥牌組 ${C.deckSize} 張、輔助牌組 ${C.supportDeckMin}～${C.supportDeckMax} 張，都是通用卡＋角色 2 張專屬卡，每種最多 ${C.maxCopies} 張。</li></ul>
+    <h4>通用戰鬥卡</h4><div style="font-size:12px">${C.commonCards.map(cardLine).join('<br>')}</div>
+    <h4>通用輔助卡</h4><div style="font-size:12px">${C.commonSupport.map(supLine).join('<br>')}</div>
+    <h4>角色池</h4><div style="font-size:12px">${Object.values(C.characters).map(ch => `<b>${ch.name}</b> HP ${ch.hp}・速度 ${ch.speed}<br>${ch.cards.map(cardLine).join('<br>')}<br>${ch.support.map(supLine).join('<br>')}`).join('<br><br>')}</div>
     </div><div class="row"><button class="pri" onclick="closeModal()">關閉</button></div>`);
 }
-
-function showStats() {
-  const P = G.players;
-  const keysOf = p => p.deckKeys;
-  const table = p => {
-    const rows = keysOf(p).map(k => {
-      const e = p.stats.eff[k];
-      const hasEff = def(k).combo || def(k).counterOnWin != null || def(k).onWinNextAttackBonus || def(k).dodgeChance != null || def(k).breakOnWin;
-      return `<tr><td>${cardLabel(k)}×${p.deckCounts[k]}</td><td>${p.stats.use[k] || 0}</td><td>${p.stats.dmg[k] || 0}</td>
-        <td>${hasEff ? `<span class="ok">${e ? e.ok : 0}</span> / <span class="ng">${e ? e.miss : 0}</span>` : '—'}</td></tr>`;
-    }).join('');
-    const s = p.stats;
-    return `<h4>${who(p)}　HP ${p.hp}/${p.maxHp}</h4>
-      <div style="font-size:12px;margin-bottom:6px">命中 ${s.hits}・擋下 ${s.blocks}・閃避 ${s.dodges}・破防 ${s.breaks}・總傷害 ${s.dmgDealt}・洗牌 ${s.shuffles}</div>
-      <table><tr><th>卡牌</th><th>使用</th><th>傷害</th><th>組合/效果<br>觸發/落空</th></tr>${rows}</table>`;
-  };
-  const mu = Object.entries(G.matchups).map(([k, v]) => `<tr><td>${k}</td><td>${v}</td></tr>`).join('');
-  openModal(`<h3>${G.winner === 0 ? '🏆 你贏了' : G.winner === 1 ? '💀 你輸了' : '🤝 平手'}（${G.turn} 回合）</h3>
-    <div style="font-size:12px;color:var(--muted)">規則：攻擊對攻擊＝${CLASH[CONFIG.attackClash]}</div>
-    ${table(P[0])}${table(P[1])}
-    <h4>各格結算類型</h4><table><tr><th>結果</th><th>次數</th></tr>${mu}</table>
-    <div class="note" style="font-size:11px;color:var(--muted);margin-top:8px">「觸發/落空」：組合卡看條件是否成立；招架、盾擊看是否勝利；見切看勝利後下一格是否接到攻擊卡；閃避類看擲骰成敗；點穴看是否勝過防禦。傷害含反擊。</div>
-    <div class="row"><button onclick="copyLog()">複製紀錄</button><button onclick="closeModal();toSelect()">回選單</button>
-    <button class="pri" onclick="closeModal();startGame(...G.lastPick)">再來一局</button></div>`);
+function statsTable(p, stats) {
+  const keys = p ? p.deckKeys : Object.keys(stats.use);
+  const rows = keys.map(k => {
+    const e = stats.eff[k], d = def(k);
+    const hasEff = d.combo || d.counterOnWin != null || d.onWinNextAttackBonus || d.dodgeChance != null || d.breakOnWin;
+    return `<tr><td>${cardLabel(k)}</td><td>${stats.use[k] || 0}</td><td>${stats.dmg[k] || 0}</td>
+      <td>${hasEff ? `<span class="ok">${e ? e.ok : 0}</span> / <span class="ng">${e ? e.miss : 0}</span>` : '—'}</td></tr>`;
+  }).join('');
+  const sup = Object.entries(stats.sup).map(([k, n]) => `${sdef(k).name}×${n}`).join('、');
+  return `<div style="font-size:12px;margin-bottom:6px">命中 ${stats.hits}・擋下 ${stats.blocks}・閃避 ${stats.dodges}・破防 ${stats.breaks}・造成傷害 ${stats.dmgDealt}（輔助 ${stats.supDmg}）・受到傷害 ${stats.dmgTaken}</div>
+    <table><tr><th>卡牌</th><th>使用</th><th>傷害</th><th>組合/效果<br>觸發/落空</th></tr>${rows}</table>
+    ${sup ? `<div style="font-size:12px;margin-top:6px">輔助卡使用：${sup}</div>` : ''}`;
 }
-
+// 從獎勵彈窗打開本場統計，「返回」時把獎勵選項還原
+function showBattleStats() {
+  const back = $('#mbox').innerHTML, saved = CHOICES;
+  const [P, E] = G.players;
+  const mu = Object.entries(G.matchups).map(([k, v]) => `<tr><td>${k}</td><td>${v}</td></tr>`).join('');
+  openModal(`<h3>本場統計（${G.turn} 回合）</h3><h4>${P.title}</h4>${statsTable(P, P.stats)}<h4>${E.title}</h4>${statsTable(E, E.stats)}
+    <h4>各格結算類型</h4><table><tr><th>結果</th><th>次數</th></tr>${mu}</table>
+    <div class="row"><button class="pri" id="statsBack">返回</button></div>`);
+  CHOICES = saved;
+  $('#statsBack').onclick = () => { $('#mbox').innerHTML = back; $('#modal').scrollTop = 0; };
+}
+function showRunSummary() {
+  const s = RUN.stats;
+  openModal(`<h3>${RUN.won ? '🏆 通關！' : '💀 冒險失敗'}</h3>
+    <div style="font-size:13px;line-height:1.7">到達：地圖 ${RUN.mapState.mi + 1}・第 ${RUN.mapState.pos ? RUN.mapState.pos.s + 1 : 0} 步｜戰鬥 ${RUN.battles} 場｜最高連擊 ${RUN.maxCombo}<br>
+    隊伍：${RUN.party.map((c, i) => `${c.ch.name}${i === RUN.main ? '（主角）' : ''}${c.upNames.length ? '［' + c.upNames.join('、') + '］' : ''}`).join('、')}<br>
+    裝備：${RUN.equipment.map(e => CONFIG.equipment[e].name).join('、') || '無'}<br>路線：${RUN.history.join(' → ')}</div>
+    <h4>整趟冒險統計（主角出的牌）</h4>${statsTable(null, s)}
+    <div class="row"><button onclick="copyLog()">複製紀錄</button><button onclick="closeModal();toTitle()">回標題</button>
+    <button class="pri" onclick="closeModal();startRun(RUN.party[0].key)">同角色再來</button></div>`);
+}
 function copyLog() {
   let text = $('#log').innerText;
-  if (G && G.over) {
-    text += '\n\n=== 統計 ===\n' + G.players.map(p => `${who(p)} HP ${p.hp}：` + p.deckKeys.map(k => {
-      const e = p.stats.eff[k]; return `${def(k).name} 用${p.stats.use[k] || 0} 傷${p.stats.dmg[k] || 0}${e ? ` 觸${e.ok}/落${e.miss}` : ''}`; }).join('，')).join('\n');
+  if (RUN && RUN.over) {
+    const s = RUN.stats;
+    text += '\n\n=== 冒險統計 ===\n' + Object.keys(s.use).map(k => { const e = s.eff[k]; return `${def(k).name} 用${s.use[k]} 傷${s.dmg[k] || 0}${e ? ` 觸${e.ok}/落${e.miss}` : ''}`; }).join('，') +
+      `\n裝備：${RUN.equipment.map(e => CONFIG.equipment[e].name).join('、')}\n最高連擊 ${RUN.maxCombo}`;
   }
   const done = () => toast('已複製到剪貼簿');
   if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(text).then(done, () => fallbackCopy(text, done));
@@ -832,100 +1471,73 @@ function fallbackCopy(text, done) {
   const ta = document.createElement('textarea'); ta.value = text; document.body.appendChild(ta); ta.select();
   try { document.execCommand('copy'); done(); } catch (e) { toast('複製失敗'); } ta.remove();
 }
-
 function confirmQuit() {
-  openModal(`<h3>回到選單？</h3><div>目前對局會結束。</div>
-    <div class="row"><button onclick="closeModal()">取消</button><button class="pri" onclick="closeModal();toSelect()">回選單</button></div>`);
+  openModal(`<h3>放棄這次冒險？</h3>
+    <div class="row"><button onclick="closeModal()">取消</button><button class="pri" onclick="closeModal();endRun(false)">放棄</button></div>`);
 }
 
-// ---------- 角色選擇 ----------
-let pick = { me: 'swordsman', opp: 'random' };
-function charOptHTML(key, sel, group) {
-  const ch = CONFIG.characters[key];
-  return `<button class="charopt ${sel ? 'sel' : ''}" data-g="${group}" data-k="${key}">
-    <div class="cn">${ch.name}</div><div class="cs">HP ${ch.hp}・速 ${ch.speed}</div></button>`;
-}
-function charDetailHTML(key) {
-  if (key === 'random') return `<div class="chardetail">開局時隨機選一個角色，使用該角色的預設牌組。</div>`;
-  const ch = CONFIG.characters[key];
-  return `<div class="chardetail"><b>${ch.name}</b>　HP ${ch.hp}・速度 ${ch.speed}<br>專屬卡：<br>${ch.cards.map(cardLine).join('<br>')}</div>`;
-}
-function deckRowHTML(side, charKey) {
-  const label = side === 'me' ? '我方' : '對手';
-  if (charKey === 'random') return `<div class="deckrow"><div class="dinfo"><b>${label}</b>：隨機角色的預設牌組</div></div>`;
-  const custom = decks[side][charKey] && deckValid(charKey, decks[side][charKey]);
-  const d = deckFor(side, charKey);
-  return `<div class="deckrow"><div class="dinfo"><b>${label}・${CONFIG.characters[charKey].name}</b>（${custom ? '自訂' : '預設'} ${deckCount(d)} 張）<br>${deckSummary(d)}</div>
-    <button class="sbtn" data-edit="${side}">編輯</button></div>`;
-}
-function renderSelect() {
+// =====================================================================
+//  標題畫面、組牌
+// =====================================================================
+let startPick = 'swordsman';
+function renderTitle() {
   const keys = Object.keys(CONFIG.characters);
-  $('#pickMe').innerHTML = keys.map(k => charOptHTML(k, pick.me === k, 'me')).join('');
-  $('#pickOpp').innerHTML = keys.map(k => charOptHTML(k, pick.opp === k, 'opp')).join('') +
-    `<button class="charopt ${pick.opp === 'random' ? 'sel' : ''}" data-g="opp" data-k="random"><div class="cn">隨機</div><div class="cs">？</div></button>`;
-  $('#meDetail').innerHTML = charDetailHTML(pick.me);
-  $('#oppDetail').innerHTML = charDetailHTML(pick.opp);
-  $('#pickDecks').innerHTML = deckRowHTML('me', pick.me) + deckRowHTML('opp', pick.opp);
-  $('#pickRules').innerHTML =
-    `<div class="optrow"><div class="lbl">攻擊對攻擊</div>${Object.entries(CLASH).map(([k, v]) => `<button class="${CONFIG.attackClash === k ? 'sel' : ''}" data-clash="${k}">${v}</button>`).join('')}</div>`;
-}
-
-// ---------- 組牌 ----------
-let edit = null;   // { side, charKey, d }
-function openDeckEditor(side, charKey) {
-  edit = { side, charKey, d: deckFor(side, charKey) };
-  renderDeckEditor();
-}
-function renderDeckEditor() {
-  const { side, charKey, d } = edit, ch = CONFIG.characters[charKey];
-  const n = deckCount(d), ok = deckValid(charKey, d);
-  const types = {}; Object.entries(d).forEach(([k, c]) => c && bump(types, def(k).type, c));
-  const rows = cardPool(charKey).map(k => {
-    const c = d[k] || 0, ex = ch.cards.includes(k);
-    return `<div class="dbrow"><div class="dl">${cardLabel(k)}${ex ? '<span class="ex">專屬</span>' : ''}<br><small>${cardLine(k).replace(/^.*?］<\/span> ?/, '')}</small></div>
-      <button data-dk="${k}" data-dd="-1" ${c <= 0 ? 'disabled' : ''}>−</button><span class="n">${c}</span>
-      <button data-dk="${k}" data-dd="1" ${c >= CONFIG.maxCopies || n >= CONFIG.deckSize ? 'disabled' : ''}>＋</button></div>`;
+  $('#pickStart').innerHTML = keys.map(k => { const ch = CONFIG.characters[k];
+    return `<button class="charopt ${startPick === k ? 'sel' : ''}" data-start="${k}"><div class="cn">${ch.name}</div><div class="cs">HP ${ch.hp}・速 ${ch.speed}</div></button>`; }).join('');
+  const ch = CONFIG.characters[startPick];
+  $('#startDetail').innerHTML = `<div class="chardetail"><b>${ch.name}</b>　HP ${ch.hp}・速度 ${ch.speed}<br>戰鬥專屬：<br>${ch.cards.map(cardLine).join('<br>')}<br>輔助專屬：<br>${ch.support.map(supLine).join('<br>')}</div>`;
+  $('#deckList').innerHTML = keys.map(k => {
+    const tag = kind => savedDecks[kind][k] && deckValid(kind, k, savedDecks[kind][k]) ? '自訂' : '預設';
+    return `<div class="deckline"><b>${CONFIG.characters[k].name}</b><span class="tag">戰鬥${tag('battle')}・輔助${tag('support')}</span>
+      <button class="sbtn" data-edit="battle" data-ek="${k}">戰鬥</button><button class="sbtn" data-edit="support" data-ek="${k}">輔助</button></div>`;
   }).join('');
-  openModal(`<h3>${side === 'me' ? '我方' : '對手'}牌組：${ch.name}</h3>
-    <div class="dbsum">共 <b class="${ok ? 'ok' : 'ng'}">${n} / ${CONFIG.deckSize}</b> 張（每種最多 ${CONFIG.maxCopies}）・
-      ${Object.keys(TYPES).filter(t => types[t]).map(t => `<span class="${TYPES[t].cls}">${TYPES[t].label}${types[t]}</span>`).join(' ')}</div>
-    <div id="dbList">${rows}</div>
+  $('#pickRules').innerHTML = `<div class="optrow"><div class="lbl">攻擊對攻擊</div>${Object.entries(CLASH).map(([k, v]) => `<button class="${CONFIG.attackClash === k ? 'sel' : ''}" data-clash="${k}">${v}</button>`).join('')}</div>`;
+}
+$('#titleScreen').addEventListener('click', e => {
+  const s = e.target.closest('[data-start]'); if (s) { startPick = s.dataset.start; return renderTitle(); }
+  const c = e.target.closest('[data-clash]'); if (c) { CONFIG.attackClash = c.dataset.clash; return renderTitle(); }
+  const ed = e.target.closest('[data-edit]'); if (ed) return openDeckEditor(ed.dataset.edit, ed.dataset.ek);
+});
+$('#startBtn').addEventListener('click', () => startRun(startPick));
+function toTitle() { G = null; RUN = null; showScreen('#titleScreen'); renderTitle(); }
+
+let edit = null;   // { kind, charKey, d }
+function openDeckEditor(kind, charKey) { edit = { kind, charKey, d: deckFor(kind, charKey) }; renderDeckEditor(); }
+function renderDeckEditor() {
+  const { kind, charKey, d } = edit, K = DECK_KIND[kind], ch = CONFIG.characters[charKey];
+  const n = deckCount(d), ok = deckValid(kind, charKey, d), max = K.max(), min = K.min();
+  const types = {}; Object.entries(d).forEach(([k, c]) => c && bump(types, K.typeOf(k), c));
+  const exList = kind === 'battle' ? ch.cards : ch.support;
+  const rows = K.pool(charKey).map(k => {
+    const c = d[k] || 0;
+    return `<div class="dbrow"><div class="dl">${K.label1(k)}${exList.includes(k) ? '<span class="ex">專屬</span>' : ''}<br><small>${K.desc(k)}</small></div>
+      <button data-dk="${k}" data-dd="-1" ${c <= 0 ? 'disabled' : ''}>−</button><span class="n">${c}</span>
+      <button data-dk="${k}" data-dd="1" ${c >= CONFIG.maxCopies || n >= max ? 'disabled' : ''}>＋</button></div>`;
+  }).join('');
+  const need = min === max ? `${n} / ${max}` : `${n}（${min}～${max}）`;
+  openModal(`<h3>${ch.name}：${K.label}牌組</h3>
+    <div class="dbsum">共 <b class="${ok ? 'ok' : 'ng'}">${need}</b> 張（每種最多 ${CONFIG.maxCopies}）
+      ${kind === 'battle' ? '・' + Object.keys(TYPES).filter(t => types[t]).map(t => `<span class="${TYPES[t].cls}">${TYPES[t].label}${types[t]}</span>`).join(' ') : ''}</div>
+    <div>${rows}</div>
     <div class="row"><button data-dact="reset">恢復預設</button><button data-dact="clear">清空</button>
-      <button class="pri" data-dact="done" ${ok ? '' : 'disabled'}>${ok ? '完成' : `還差 ${CONFIG.deckSize - n} 張`}</button></div>`);
+      <button class="pri" data-dact="done" ${ok ? '' : 'disabled'}>${ok ? '完成' : n < min ? `還差 ${min - n} 張` : '張數不對'}</button></div>`);
 }
 $('#mbox').addEventListener('click', e => {
   if (!edit) return;
   const b = e.target.closest('[data-dk],[data-dact]'); if (!b) return;
+  const K = DECK_KIND[edit.kind];
   if (b.dataset.dk) {
     const k = b.dataset.dk, v = (edit.d[k] || 0) + +b.dataset.dd;
-    if (v < 0 || v > CONFIG.maxCopies || (+b.dataset.dd > 0 && deckCount(edit.d) >= CONFIG.deckSize)) return;
+    if (v < 0 || v > CONFIG.maxCopies || (+b.dataset.dd > 0 && deckCount(edit.d) >= K.max())) return;
     if (v) edit.d[k] = v; else delete edit.d[k];
     const top = $('#modal').scrollTop; renderDeckEditor(); $('#modal').scrollTop = top;
-  } else if (b.dataset.dact === 'reset') { edit.d = defaultDeck(edit.charKey); renderDeckEditor(); }
+  } else if (b.dataset.dact === 'reset') { edit.d = K.def(edit.charKey); renderDeckEditor(); }
   else if (b.dataset.dact === 'clear') { edit.d = {}; renderDeckEditor(); }
-  else if (b.dataset.dact === 'done' && deckValid(edit.charKey, edit.d)) {
-    decks[edit.side][edit.charKey] = edit.d; saveDecks(); edit = null; closeModal(); renderSelect();
+  else if (b.dataset.dact === 'done' && deckValid(edit.kind, edit.charKey, edit.d)) {
+    savedDecks[edit.kind][edit.charKey] = edit.d; saveDecks(); edit = null; closeModal(); renderTitle();
   }
 });
-
-$('#selectScreen').addEventListener('click', e => {
-  const o = e.target.closest('[data-clash]');
-  if (o) { CONFIG.attackClash = o.dataset.clash; return renderSelect(); }
-  const ed = e.target.closest('[data-edit]');
-  if (ed) return openDeckEditor(ed.dataset.edit, ed.dataset.edit === 'me' ? pick.me : pick.opp);
-  const el = e.target.closest('[data-g]'); if (!el) return;
-  pick[el.dataset.g] = el.dataset.k; renderSelect();
-});
-$('#startBtn').addEventListener('click', () => {
-  const keys = Object.keys(CONFIG.characters);
-  const opp = pick.opp === 'random' ? keys[Math.floor(Math.random() * keys.length)] : pick.opp;
-  startGame(pick.me, opp, deckFor('me', pick.me), pick.opp === 'random' ? defaultDeck(opp) : deckFor('opp', opp));
-});
-function toSelect() {
-  G = null;  // 讓進行中的翻牌流程停止
-  $('#gameScreen').classList.add('hidden'); $('#selectScreen').classList.remove('hidden'); renderSelect();
-}
-renderSelect();
+renderTitle();
 </script>
 </body>
 </html>
