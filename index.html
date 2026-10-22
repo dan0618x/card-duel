@@ -168,7 +168,7 @@ const CONFIG = {
   ],
   scaling: {
     hpPerStep: 0.05,    // 同地圖每往後一步，怪物 HP +5%
-    powEverySteps: 4,   // 同地圖每往後幾步，怪物威力 +1
+    powEverySteps: 5,   // 同地圖每往後幾步，怪物威力 +1（王不吃步數加成）
     eliteHp: 1.4,       // 精英：HP 倍率
     elitePow: 1,        // 精英：威力加成
   },
@@ -802,7 +802,7 @@ function buildPile(counts) {
 function makeMonster(kind) {
   const m = RUN.mapState, mp = CONFIG.maps[m.mi], S = CONFIG.scaling;
   const key = kind === 'boss' ? mp.boss : mp.monsters[Math.floor(Math.random() * mp.monsters.length)];
-  const md = CONFIG.monsters[key], step = Math.min(m.pos.s, m.S - 1);
+  const md = CONFIG.monsters[key], step = kind === 'boss' ? 0 : m.pos.s;
   const hp = Math.round(md.hp * (1 + S.hpPerStep * step) * (kind === 'elite' ? S.eliteHp : 1));
   const pow = mp.powBonus + Math.floor(step / S.powEverySteps) + (kind === 'elite' ? S.elitePow : 0);
   const src = [];
