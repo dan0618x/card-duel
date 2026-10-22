@@ -141,21 +141,21 @@ const CONFIG = {
   // traits：armor 受到傷害−N / regen 每回合結束回復 N / thorns 被命中時反彈 N / enrage 每回合威力+N（累加）
   monsters: {
     // 每種怪物的牌組偏向某個類型：看牌組（點怪物）和棄牌堆就能猜它會出什麼
-    slime:    { name: '史萊姆',   icon: '🟢', hp: 10, speed: 1, deck: { shell: 4, block: 2, slam: 2, grab: 2 }, traits: { regen: 1 } },
-    wolf:     { name: '野狼',     icon: '🐺', hp: 9,  speed: 4, deck: { bite: 3, stab: 3, claw: 2, block: 2 } },
-    goblin:   { name: '哥布林',   icon: '👺', hp: 11, speed: 3, deck: { stab: 2, heavy: 1, block: 2, grab: 2, chase: 2, parry: 1 } },
-    shroom:   { name: '毒菇',     icon: '🍄', hp: 10, speed: 2, deck: { spore: 4, grab: 2, block: 2, slam: 2 }, traits: { thorns: 1 } },
-    treant:   { name: '樹精王',   icon: '🌳', hp: 26, speed: 2, deck: { slam: 2, smash: 2, shell: 3, guard: 2, spore: 2, roar: 1 }, traits: { regen: 2 } },
-    skeleton: { name: '骷髏兵',   icon: '💀', hp: 13, speed: 2, deck: { stab: 3, heavy: 2, chase: 1, shell: 2, grab: 2 }, traits: { armor: 1 } },
-    bat:      { name: '蝙蝠群',   icon: '🦇', hp: 10, speed: 5, deck: { bite: 3, wing: 3, stab: 2, grab: 2 } },
-    golem:    { name: '石像',     icon: '🗿', hp: 16, speed: 0, deck: { shell: 3, guard: 3, smash: 2, slam: 2 } },
-    shaman:   { name: '暗影法師', icon: '🧙', hp: 12, speed: 3, deck: { curse: 4, spore: 2, grab: 1, block: 2, wing: 1 } },
-    bonelord: { name: '骸骨將軍', icon: '☠️', hp: 34, speed: 2, deck: { smash: 2, claw: 2, guard: 2, shell: 2, curse: 2, chase: 2 }, traits: { enrage: 1 } },
-    dknight:  { name: '惡魔騎士', icon: '😈', hp: 18, speed: 3, deck: { claw: 3, smash: 2, guard: 2, parry: 1, grab: 2 } },
-    succubus: { name: '魅魔',     icon: '💋', hp: 15, speed: 5, deck: { wing: 3, curse: 4, bite: 2, stab: 1 } },
-    hellhound:{ name: '地獄犬',   icon: '🐕', hp: 16, speed: 4, deck: { bite: 3, claw: 3, roar: 2, block: 2 }, traits: { thorns: 1 } },
-    dgolem:   { name: '魔像',     icon: '🪨', hp: 22, speed: 1, deck: { guard: 3, shell: 3, smash: 2, hellfire: 2 }, traits: { armor: 1 } },
-    demonlord:{ name: '魔王',     icon: '👿', hp: 46, speed: 3, deck: { hellfire: 2, smash: 2, claw: 2, guard: 2, curse: 2, wing: 2 }, traits: { enrage: 1, regen: 1 } },
+    slime:    { name: '史萊姆',   icon: '🟢', hp: 8,  speed: 1, deck: { shell: 5, block: 2, slam: 2, grab: 1 }, traits: { regen: 1 } },
+    wolf:     { name: '野狼',     icon: '🐺', hp: 8,  speed: 4, deck: { bite: 3, stab: 3, claw: 3, block: 1 } },
+    goblin:   { name: '哥布林',   icon: '👺', hp: 9,  speed: 3, deck: { stab: 2, heavy: 1, block: 2, grab: 2, chase: 2, parry: 1 } },
+    shroom:   { name: '毒菇',     icon: '🍄', hp: 8,  speed: 2, deck: { spore: 5, grab: 2, block: 1, slam: 2 }, traits: { thorns: 1 } },
+    treant:   { name: '樹精王',   icon: '🌳', hp: 22, speed: 2, deck: { slam: 2, smash: 2, shell: 3, guard: 2, spore: 2, roar: 1 }, traits: { regen: 1 } },
+    skeleton: { name: '骷髏兵',   icon: '💀', hp: 11, speed: 2, deck: { stab: 3, heavy: 2, chase: 2, shell: 2, grab: 1 }, traits: { armor: 1 } },
+    bat:      { name: '蝙蝠群',   icon: '🦇', hp: 9,  speed: 5, deck: { bite: 3, wing: 3, stab: 3, grab: 1 } },
+    golem:    { name: '石像',     icon: '🗿', hp: 13, speed: 0, deck: { shell: 4, guard: 3, smash: 2, slam: 1 } },
+    shaman:   { name: '暗影法師', icon: '🧙', hp: 10, speed: 3, deck: { curse: 5, spore: 2, block: 2, wing: 1 } },
+    bonelord: { name: '骸骨將軍', icon: '☠️', hp: 30, speed: 2, deck: { smash: 2, claw: 2, guard: 2, shell: 2, curse: 2, chase: 2 }, traits: { enrage: 1 } },
+    dknight:  { name: '惡魔騎士', icon: '😈', hp: 15, speed: 3, deck: { claw: 4, smash: 2, guard: 2, grab: 2 } },
+    succubus: { name: '魅魔',     icon: '💋', hp: 13, speed: 5, deck: { wing: 3, curse: 5, bite: 2 } },
+    hellhound:{ name: '地獄犬',   icon: '🐕', hp: 14, speed: 4, deck: { bite: 4, claw: 3, roar: 2, block: 1 }, traits: { thorns: 1 } },
+    dgolem:   { name: '魔像',     icon: '🪨', hp: 18, speed: 1, deck: { guard: 4, shell: 3, smash: 2, hellfire: 1 }, traits: { armor: 1 } },
+    demonlord:{ name: '魔王',     icon: '👿', hp: 40, speed: 3, deck: { hellfire: 2, smash: 2, claw: 2, guard: 2, curse: 2, wing: 2 }, traits: { enrage: 1, regen: 1 } },
   },
 
 
@@ -180,7 +180,7 @@ const CONFIG = {
     nodes: { heal: 2, buff: 2, swap: 1, treasure: 2, event: 2, elite: 2 },
     beforeBoss: ['heal', 'buff', 'heal'],
   },
-  winHealPct: 0.2,      // 每場戰鬥勝利後，主角回復最大 HP 的比例
+  winHealPct: 0.3,      // 每場戰鬥勝利後，主角回復最大 HP 的比例
   healPct: 0.3,         // 回血點：全隊回復最大 HP 的比例
   mapClearHeal: 0.3,    // 打完王：全隊回復比例
   buffBattles: 3,       // 祝福持續幾場戰鬥
