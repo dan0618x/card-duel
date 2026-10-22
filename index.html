@@ -113,24 +113,25 @@ const CONFIG = {
 
   // ---------- 角色池（9 位） ----------
   // 角色只有 HP、速度的差別；cards＝2 張專屬戰鬥卡，support＝2 張專屬輔助卡
+  // （冒險要連打很多場，HP 是之前 1 對 1 版本的兩倍）
   characters: {
-    swordsman: { name: '劍士',   hp: 20, speed: 3, cards: ['slash', 'mikiri'],    support: ['sw_aura', 'sw_eye'],
+    swordsman: { name: '劍士',   hp: 40, speed: 3, cards: ['slash', 'mikiri'],    support: ['sw_aura', 'sw_eye'],
                  defaultDeck: { stab: 2, heavy: 2, chase: 2, block: 2, parry: 2, grab: 2, slash: 2, mikiri: 2 } },
-    fighter:   { name: '鬥士',   hp: 24, speed: 1, cards: ['throw', 'tetsu'],     support: ['fi_wall', 'fi_spirit'],
+    fighter:   { name: '鬥士',   hp: 48, speed: 1, cards: ['throw', 'tetsu'],     support: ['fi_wall', 'fi_spirit'],
                  defaultDeck: { stab: 2, heavy: 2, chase: 2, block: 2, parry: 2, grab: 2, throw: 2, tetsu: 2 } },
-    assassin:  { name: '刺客',   hp: 17, speed: 5, cards: ['shadow', 'phantom'],  support: ['as_smoke', 'as_poison'],
+    assassin:  { name: '刺客',   hp: 34, speed: 5, cards: ['shadow', 'phantom'],  support: ['as_smoke', 'as_poison'],
                  defaultDeck: { stab: 3, chase: 2, block: 2, grab: 2, dodge: 3, shadow: 2, phantom: 2 } },
-    knight:    { name: '騎士',   hp: 26, speed: 2, cards: ['bash', 'charge'],     support: ['kn_guard', 'kn_order'],
+    knight:    { name: '騎士',   hp: 52, speed: 2, cards: ['bash', 'charge'],     support: ['kn_guard', 'kn_order'],
                  defaultDeck: { stab: 2, heavy: 2, block: 3, parry: 2, grab: 2, bash: 3, charge: 2 } },
-    monk:      { name: '武僧',   hp: 22, speed: 4, cards: ['pressure', 'palm'],   support: ['mo_breath', 'mo_qi'],
+    monk:      { name: '武僧',   hp: 44, speed: 4, cards: ['pressure', 'palm'],   support: ['mo_breath', 'mo_qi'],
                  defaultDeck: { stab: 2, chase: 2, block: 2, parry: 2, grab: 3, pressure: 2, palm: 3 } },
-    lancer:    { name: '槍兵',   hp: 21, speed: 3, cards: ['thrust', 'whirl'],    support: ['la_spear', 'la_brace'],
+    lancer:    { name: '槍兵',   hp: 42, speed: 3, cards: ['thrust', 'whirl'],    support: ['la_spear', 'la_brace'],
                  defaultDeck: { stab: 2, heavy: 2, chase: 2, block: 2, parry: 2, grab: 2, thrust: 2, whirl: 2 } },
-    archer:    { name: '弓手',   hp: 18, speed: 4, cards: ['rapid', 'pin'],       support: ['ar_rain', 'ar_aim'],
+    archer:    { name: '弓手',   hp: 36, speed: 4, cards: ['rapid', 'pin'],       support: ['ar_rain', 'ar_aim'],
                  defaultDeck: { stab: 2, chase: 2, block: 2, parry: 2, grab: 2, dodge: 2, rapid: 2, pin: 2 } },
-    berserker: { name: '狂戰士', hp: 25, speed: 2, cards: ['rage', 'bloodlust'],  support: ['be_blood', 'be_shout'],
+    berserker: { name: '狂戰士', hp: 50, speed: 2, cards: ['rage', 'bloodlust'],  support: ['be_blood', 'be_shout'],
                  defaultDeck: { stab: 2, heavy: 2, chase: 2, block: 2, parry: 2, grab: 2, rage: 2, bloodlust: 2 } },
-    dancer:    { name: '舞者',   hp: 19, speed: 5, cards: ['swirl', 'fan'],       support: ['da_cheer', 'da_mirage'],
+    dancer:    { name: '舞者',   hp: 38, speed: 5, cards: ['swirl', 'fan'],       support: ['da_cheer', 'da_mirage'],
                  defaultDeck: { stab: 2, chase: 2, block: 2, parry: 2, grab: 2, dodge: 2, swirl: 2, fan: 2 } },
   },
   // 沒自訂輔助牌組時：2 張專屬各 2 張 + 這些通用輔助卡
@@ -139,22 +140,24 @@ const CONFIG = {
   // ---------- 怪物（12 種 + 3 王） ----------
   // traits：armor 受到傷害−N / regen 每回合結束回復 N / thorns 被命中時反彈 N / enrage 每回合威力+N（累加）
   monsters: {
-    slime:    { name: '史萊姆',   icon: '🟢', hp: 14, speed: 1, deck: { slam: 3, shell: 3, grab: 2, block: 2 }, traits: { regen: 1 } },
-    wolf:     { name: '野狼',     icon: '🐺', hp: 12, speed: 4, deck: { bite: 3, stab: 3, claw: 2, block: 2 } },
-    goblin:   { name: '哥布林',   icon: '👺', hp: 15, speed: 3, deck: { stab: 2, heavy: 1, block: 2, grab: 2, chase: 2, parry: 1 } },
-    shroom:   { name: '毒菇',     icon: '🍄', hp: 13, speed: 2, deck: { spore: 3, grab: 2, block: 3, slam: 2 }, traits: { thorns: 1 } },
-    treant:   { name: '樹精王',   icon: '🌳', hp: 45, speed: 2, deck: { slam: 2, smash: 2, shell: 3, guard: 2, spore: 2, roar: 1 }, traits: { armor: 1, regen: 2 } },
-    skeleton: { name: '骷髏兵',   icon: '💀', hp: 18, speed: 2, deck: { stab: 2, heavy: 2, shell: 2, parry: 2, grab: 2 }, traits: { armor: 1 } },
-    bat:      { name: '蝙蝠群',   icon: '🦇', hp: 14, speed: 5, deck: { bite: 3, wing: 3, stab: 2, grab: 2 } },
-    golem:    { name: '石像',     icon: '🗿', hp: 24, speed: 0, deck: { shell: 3, guard: 3, smash: 2, slam: 2 } },
-    shaman:   { name: '暗影法師', icon: '🧙', hp: 16, speed: 3, deck: { curse: 3, spore: 2, grab: 2, block: 2, wing: 1 } },
-    bonelord: { name: '骸骨將軍', icon: '☠️', hp: 70, speed: 2, deck: { smash: 2, claw: 2, guard: 2, shell: 2, curse: 2, chase: 2 }, traits: { enrage: 1, armor: 1 } },
-    dknight:  { name: '惡魔騎士', icon: '😈', hp: 26, speed: 3, deck: { claw: 2, smash: 2, guard: 2, parry: 2, grab: 2 } },
-    succubus: { name: '魅魔',     icon: '💋', hp: 22, speed: 5, deck: { wing: 3, curse: 3, bite: 2, stab: 2 } },
-    hellhound:{ name: '地獄犬',   icon: '🐕', hp: 24, speed: 4, deck: { bite: 3, claw: 3, roar: 2, block: 2 }, traits: { thorns: 1 } },
-    dgolem:   { name: '魔像',     icon: '🪨', hp: 32, speed: 1, deck: { guard: 3, shell: 3, smash: 2, hellfire: 2 }, traits: { armor: 2 } },
-    demonlord:{ name: '魔王',     icon: '👿', hp: 100, speed: 3, deck: { hellfire: 2, smash: 2, claw: 2, guard: 2, curse: 2, wing: 2 }, traits: { enrage: 1, regen: 2 } },
+    // 每種怪物的牌組偏向某個類型：看牌組（點怪物）和棄牌堆就能猜它會出什麼
+    slime:    { name: '史萊姆',   icon: '🟢', hp: 10, speed: 1, deck: { shell: 4, block: 2, slam: 2, grab: 2 }, traits: { regen: 1 } },
+    wolf:     { name: '野狼',     icon: '🐺', hp: 9,  speed: 4, deck: { bite: 3, stab: 3, claw: 2, block: 2 } },
+    goblin:   { name: '哥布林',   icon: '👺', hp: 11, speed: 3, deck: { stab: 2, heavy: 1, block: 2, grab: 2, chase: 2, parry: 1 } },
+    shroom:   { name: '毒菇',     icon: '🍄', hp: 10, speed: 2, deck: { spore: 4, grab: 2, block: 2, slam: 2 }, traits: { thorns: 1 } },
+    treant:   { name: '樹精王',   icon: '🌳', hp: 26, speed: 2, deck: { slam: 2, smash: 2, shell: 3, guard: 2, spore: 2, roar: 1 }, traits: { regen: 2 } },
+    skeleton: { name: '骷髏兵',   icon: '💀', hp: 13, speed: 2, deck: { stab: 3, heavy: 2, chase: 1, shell: 2, grab: 2 }, traits: { armor: 1 } },
+    bat:      { name: '蝙蝠群',   icon: '🦇', hp: 10, speed: 5, deck: { bite: 3, wing: 3, stab: 2, grab: 2 } },
+    golem:    { name: '石像',     icon: '🗿', hp: 16, speed: 0, deck: { shell: 3, guard: 3, smash: 2, slam: 2 } },
+    shaman:   { name: '暗影法師', icon: '🧙', hp: 12, speed: 3, deck: { curse: 4, spore: 2, grab: 1, block: 2, wing: 1 } },
+    bonelord: { name: '骸骨將軍', icon: '☠️', hp: 34, speed: 2, deck: { smash: 2, claw: 2, guard: 2, shell: 2, curse: 2, chase: 2 }, traits: { enrage: 1 } },
+    dknight:  { name: '惡魔騎士', icon: '😈', hp: 18, speed: 3, deck: { claw: 3, smash: 2, guard: 2, parry: 1, grab: 2 } },
+    succubus: { name: '魅魔',     icon: '💋', hp: 15, speed: 5, deck: { wing: 3, curse: 4, bite: 2, stab: 1 } },
+    hellhound:{ name: '地獄犬',   icon: '🐕', hp: 16, speed: 4, deck: { bite: 3, claw: 3, roar: 2, block: 2 }, traits: { thorns: 1 } },
+    dgolem:   { name: '魔像',     icon: '🪨', hp: 22, speed: 1, deck: { guard: 3, shell: 3, smash: 2, hellfire: 2 }, traits: { armor: 1 } },
+    demonlord:{ name: '魔王',     icon: '👿', hp: 46, speed: 3, deck: { hellfire: 2, smash: 2, claw: 2, guard: 2, curse: 2, wing: 2 }, traits: { enrage: 1, regen: 1 } },
   },
+
 
   // ---------- 地圖 ----------
   // powBonus：這張地圖所有怪物威力加成（跨地圖的明顯變強）
@@ -177,6 +180,7 @@ const CONFIG = {
     nodes: { heal: 2, buff: 2, swap: 1, treasure: 2, event: 2, elite: 2 },
     beforeBoss: ['heal', 'buff', 'heal'],
   },
+  winHealPct: 0.2,      // 每場戰鬥勝利後，主角回復最大 HP 的比例
   healPct: 0.3,         // 回血點：全隊回復最大 HP 的比例
   mapClearHeal: 0.3,    // 打完王：全隊回復比例
   buffBattles: 3,       // 祝福持續幾場戰鬥
@@ -1219,7 +1223,9 @@ function finishBattle() {
   if (G.winner === 1) return endRun(false);
   const kind = G.kind;
   const kh = modOf(P, 'killHeal');
-  const healMsg = kh.n ? `${kh.txt}：回復 ${healChar(c, kh.n)} HP。<br>` : '';
+  const wh = healChar(c, Math.round(charMaxHp(c) * CONFIG.winHealPct));
+  const healMsg = `戰後休整：回復 ${wh} HP。${kh.n ? `${kh.txt}：再回復 ${healChar(c, kh.n)} HP。` : ''}<br>`;
+  log(`<div class="le sys">${healMsg.replace('<br>', '')}${c.ch.name} HP ${c.hp}/${charMaxHp(c)}</div>`);
   const statsBtn = `<div class="row"><button onclick="showBattleStats()">查看本場統計</button></div>`;
   const back = () => kind === 'boss' ? mapCleared() : showMap();
   if (kind === 'monster') upgradeChoices('勝利！', healMsg, back, statsBtn);
