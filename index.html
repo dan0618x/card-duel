@@ -178,6 +178,7 @@ const CONFIG = {
     crossChance: 0.4,   // 相鄰路線之間有連線的機率（每一步、每一對路線）
     // 第 1 步全是怪；王前一步固定是休息點；中間各種點的數量（剩下的都是怪）
     nodes: { heal: 2, buff: 2, swap: 1, treasure: 2, event: 2, elite: 2 },
+    eliteFromStep: 4,   // 精英最早出現在第幾步
     beforeBoss: ['heal', 'buff', 'heal'],
   },
   winHealPct: 0.3,      // 每場戰鬥勝利後，主角回復最大 HP 的比例
@@ -631,6 +632,11 @@ function genMap(mi) {
   for (let s = 0; s < S; s++) {
     nodes.push([]);
     for (let l = 0; l < L; l++) nodes[s].push(s === 0 ? 'monster' : s === S - 1 ? before[l % before.length] : bag.pop() || 'monster');
+  }
+  // 精英太早出現的話，跟後面的普通怪物交換位置
+  for (let s = 1; s < M.eliteFromStep - 1; s++) for (let l = 0; l < L; l++) if (nodes[s][l] === 'elite') {
+    const spots = []; for (let t = M.eliteFromStep - 1; t < S - 1; t++) for (let k = 0; k < L; k++) if (nodes[t][k] === 'monster') spots.push([t, k]);
+    if (spots.length) { const [t, k] = spots[Math.floor(Math.random() * spots.length)]; nodes[t][k] = 'elite'; nodes[s][l] = 'monster'; }
   }
   for (let s = 0; s < S - 1; s++) {
     edges.push([]);
@@ -1123,14 +1129,14 @@ function resolveSlot(i, ctx) {
       fxFloat(W.idx, '擋下！', 'info', 20);
       const h = dealDamage(W, L, wi.key, dmg);
       res = `→ ${W.name}擋下！不受傷，反擊 ${h.dmg} 傷害（${[...parts, ...h.notes].join('，')}）。${L.name} HP ${h.before} → ${L.hp}`;
-      badge = { text: `${W.name}擋下<br>反擊 ${h.dmg}`, cls: 'win' + r.w };
+      badge = { text: `${W.name}擋下<br>反擊 ${dmg}${h.dmg < dmg ? `（實際 ${h.dmg}）` : ''}`, cls: 'win' + r.w };
     } else {
       if (r.how === 'dodgeFail') eff(L, li.key, false);
       const base = r.how === 'diff' ? wi.power - li.power : wi.power;
       const h = applyHit(W, L, wi.key, base, ctx);
       hitBy[r.w] = true;
       res = `→ ${W.name}命中！${L.name}受到 ${h.dmg} 傷害（${r.how === 'diff' ? '威力差' : '威力'} ${base}${h.extra.length ? '；' + h.extra.join('；') : ''}）`;
-      badge = { text: `${W.name}命中<br>−${h.dmg}${W.combo >= 2 ? `<br>${W.combo} 連擊` : ''}${r.how === 'dodgeFail' ? '<br>閃避失敗' : ''}`, cls: 'win' + r.w };
+      badge = { text: `${W.name}命中<br>−${h.dmg}${h.dmg < base ? `（${base}）` : ''}${W.combo >= 2 ? `<br>${W.combo} 連擊` : ''}${r.how === 'dodgeFail' ? '<br>閃避失敗' : ''}`, cls: 'win' + r.w };
       if (wd.type === 'skill' && r.how === 'triangle') {
         const brk = wd.breakOnWin || CONFIG.breakPenalty;
         ctx[1 - r.w].breakPen += brk; W.stats.breaks++;
@@ -1224,8 +1230,9 @@ function finishBattle() {
   const kind = G.kind;
   const kh = modOf(P, 'killHeal');
   const wh = healChar(c, Math.round(charMaxHp(c) * CONFIG.winHealPct));
-  const healMsg = `戰後休整：回復 ${wh} HP。${kh.n ? `${kh.txt}：再回復 ${healChar(c, kh.n)} HP。` : ''}<br>`;
-  log(`<div class="le sys">${healMsg.replace('<br>', '')}${c.ch.name} HP ${c.hp}/${charMaxHp(c)}</div>`);
+  const kg = kh.n ? healChar(c, kh.n) : 0;
+  const healMsg = wh || kg ? `${wh ? `戰後休整：回復 ${wh} HP。` : ''}${kg ? `${kh.txt}：回復 ${kg} HP。` : ''}<br>` : '';
+  log(`<div class="le sys">${healMsg.replace('<br>', '')}戰後 ${c.ch.name} HP ${c.hp}/${charMaxHp(c)}</div>`);
   const statsBtn = `<div class="row"><button onclick="showBattleStats()">查看本場統計</button></div>`;
   const back = () => kind === 'boss' ? mapCleared() : showMap();
   if (kind === 'monster') upgradeChoices('勝利！', healMsg, back, statsBtn);
