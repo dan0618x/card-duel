@@ -1,0 +1,726 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>卡牌對決 原型</title>
+<script>
+// =====================================================================
+//  CONFIG：所有數值都在這裡，改完重新整理頁面即可
+// =====================================================================
+const CONFIG = {
+  energyPerTurn: 3,     // 每回合能量
+  handSize: 5,          // 開局抽幾張／每回合補到幾張
+  slots: 3,             // 每回合出牌格數
+  copiesPerCard: 2,     // 牌庫中每種卡的張數（6 通用 + 2 專屬）×2 = 16
+  baseCounter: 1,       // 防禦勝利的基本反擊傷害
+  breakPenalty: 1,      // 破防：對手下一格威力減少多少
+
+  // type: attack 攻擊 / defense 防禦 / skill 技巧
+  // combo: { cond: 'prevHit' 前格命中 | 'prevBlock' 前格擋下, bonus: 威力加成 }
+  // counterOnWin: 防禦勝利時的反擊值（取代 baseCounter）
+  // onWinNextAttackBonus: 勝利後自己下一格若為攻擊卡，威力加成
+  cards: {
+    stab:   { name: '刺擊',   type: 'attack',  cost: 0, power: 2 },
+    heavy:  { name: '重擊',   type: 'attack',  cost: 2, power: 4 },
+    chase:  { name: '追擊',   type: 'attack',  cost: 1, power: 2, combo: { cond: 'prevHit', bonus: 3 } },
+    block:  { name: '格擋',   type: 'defense', cost: 0, power: 1 },
+    parry:  { name: '招架',   type: 'defense', cost: 1, power: 2, counterOnWin: 2 },
+    grab:   { name: '擒拿',   type: 'skill',   cost: 1, power: 2 },
+    // 劍士專屬
+    slash:  { name: '連斬',   type: 'attack',  cost: 1, power: 1, combo: { cond: 'prevHit', bonus: 4 } },
+    mikiri: { name: '見切',   type: 'defense', cost: 1, power: 2, onWinNextAttackBonus: 2 },
+    // 鬥士專屬
+    throw:  { name: '摔投',   type: 'skill',   cost: 2, power: 4 },
+    tetsu:  { name: '鐵山靠', type: 'skill',   cost: 1, power: 2, combo: { cond: 'prevBlock', bonus: 3 } },
+  },
+  commonCards: ['stab', 'heavy', 'chase', 'block', 'parry', 'grab'],
+
+  // passive.firstHitBonus: 每回合第一次命中傷害加成
+  // passive.counterBonus:  防禦勝利時反擊加成
+  characters: {
+    swordsman: { name: '劍士', hp: 20, speed: 3, cards: ['slash', 'mikiri'], passive: { firstHitBonus: 1 } },
+    fighter:   { name: '鬥士', hp: 24, speed: 1, cards: ['throw', 'tetsu'],  passive: { counterBonus: 1 } },
+  },
+
+  ai: {
+    comboWeight: 2,     // 排序權重 = 1 + comboWeight × 該排序中的組合銜接數；0 = 完全隨機
+  },
+
+  ui: {
+    flipDelay: 700,     // 翻牌後到結算的停頓（毫秒）
+    slotDelay: 1100,    // 每格結算後到下一格的停頓（毫秒）
+    fastFactor: 0.25,   // 「快速」模式的時間倍率
+  },
+};
+</script>
+<style>
+  :root {
+    --bg: #14161c; --panel: #1f232c; --panel2: #2a2f3a; --text: #e8e8ec; --muted: #9aa0ac;
+    --atk: #e0564f; --def: #4b8fe0; --skl: #3fb67a; --gold: #f0c04a; --hp: #4fc36b;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; background: var(--bg); color: var(--text);
+    font-family: -apple-system, "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", sans-serif; font-size: 14px; }
+  button { font: inherit; color: inherit; border: 0; cursor: pointer; }
+  #app { max-width: 480px; margin: 0 auto; padding: 8px 10px 40px; }
+  .hidden { display: none !important; }
+
+  /* ---------- 角色選擇 ---------- */
+  h1 { font-size: 20px; margin: 8px 0 4px; }
+  h2 { font-size: 15px; margin: 16px 0 8px; color: var(--muted); font-weight: 600; }
+  .charlist { display: grid; gap: 8px; }
+  .charopt { background: var(--panel); border: 2px solid transparent; border-radius: 10px; padding: 10px; text-align: left; width: 100%; }
+  .charopt.sel { border-color: var(--gold); }
+  .charopt .cn { font-size: 16px; font-weight: 700; }
+  .charopt .cs { color: var(--muted); font-size: 12px; margin: 2px 0 6px; }
+  .charopt .cc { font-size: 12px; line-height: 1.6; }
+  .bigbtn { width: 100%; padding: 14px; border-radius: 10px; background: var(--gold); color: #222; font-weight: 700; font-size: 16px; margin-top: 16px; }
+  .bigbtn:disabled { background: #555; color: #999; }
+
+  /* ---------- 遊戲 ---------- */
+  .topbar { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+  .topbar .turn { font-weight: 700; flex: 1; }
+  .sbtn { background: var(--panel2); padding: 6px 9px; border-radius: 7px; font-size: 12px; }
+  .pbar { background: var(--panel); border-radius: 10px; padding: 7px 10px; }
+  .pbar.flash { animation: flash .5s; }
+  @keyframes flash { 0%,100% { background: var(--panel); } 30% { background: #6b2323; } }
+  .pline { display: flex; align-items: baseline; gap: 8px; }
+  .pname { font-weight: 700; }
+  .pinfo { color: var(--muted); font-size: 12px; margin-left: auto; text-align: right; }
+  .hpwrap { position: relative; height: 14px; background: #333; border-radius: 7px; margin-top: 5px; overflow: hidden; }
+  .hpfill { height: 100%; background: var(--hp); transition: width .4s; }
+  .hpfill.low { background: var(--atk); }
+  .hptext { position: absolute; inset: 0; font-size: 11px; line-height: 14px; text-align: center; font-weight: 700; text-shadow: 0 0 2px #000; }
+  .energy { margin-top: 5px; font-size: 12px; color: var(--muted); }
+  .energy b { color: var(--gold); letter-spacing: 2px; }
+
+  .board { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin: 8px 0; }
+  .slotcol { background: #191c23; border-radius: 10px; padding: 5px; display: flex; flex-direction: column; gap: 4px; border: 2px solid transparent; }
+  .slotcol.active { border-color: var(--gold); }
+  .slotlbl { text-align: center; font-size: 11px; color: var(--muted); }
+  .badge { min-height: 34px; display: flex; align-items: center; justify-content: center; text-align: center; font-size: 11px; font-weight: 700; border-radius: 6px; padding: 2px; line-height: 1.25; }
+  .badge.win0 { background: #2b4a33; } .badge.win1 { background: #5a2b2b; } .badge.none { background: #2a2d35; color: var(--muted); }
+
+  .card { position: relative; border-radius: 8px; padding: 4px 5px; background: var(--panel2); border-top: 4px solid #666; min-height: 82px; display: flex; flex-direction: column; text-align: left; width: 100%; }
+  .card.attack { border-top-color: var(--atk); } .card.defense { border-top-color: var(--def); } .card.skill { border-top-color: var(--skl); }
+  .card .ctop { display: flex; justify-content: space-between; font-size: 10px; }
+  .card .cost { background: var(--gold); color: #222; border-radius: 50%; width: 16px; height: 16px; text-align: center; line-height: 16px; font-weight: 700; }
+  .card .ty { font-weight: 700; }
+  .card.attack .ty { color: var(--atk); } .card.defense .ty { color: var(--def); } .card.skill .ty { color: var(--skl); }
+  .card .nm { font-weight: 700; font-size: 13px; margin-top: 2px; }
+  .card .pw { font-size: 11px; color: var(--muted); }
+  .card .pw b { color: var(--text); font-size: 14px; }
+  .card .ef { font-size: 9.5px; color: #cfd3da; margin-top: auto; line-height: 1.25; }
+  .card.back { background: repeating-linear-gradient(45deg, #2b3040, #2b3040 6px, #323850 6px, #323850 12px); border-top-color: #444; align-items: center; justify-content: center; color: var(--muted); font-size: 20px; }
+  .card.empty { background: transparent; border: 1px dashed #444; align-items: center; justify-content: center; color: #666; font-size: 11px; }
+  .card.flip { animation: flip .45s ease-out; }
+  @keyframes flip { from { transform: rotateY(90deg); } to { transform: rotateY(0); } }
+  .card.dim { opacity: .35; }
+  .card .final { position: absolute; right: 4px; bottom: 3px; font-size: 13px; font-weight: 800; color: var(--gold); }
+
+  .hand { display: grid; grid-template-columns: repeat(5, 1fr); gap: 5px; margin: 8px 0; }
+  .hand .card { min-height: 92px; }
+  .hint { font-size: 12px; color: var(--muted); min-height: 16px; text-align: center; }
+  .actbtn { width: 100%; padding: 13px; border-radius: 10px; background: var(--gold); color: #222; font-weight: 700; font-size: 15px; margin: 6px 0; }
+  .actbtn:disabled { background: #3a3d45; color: #888; }
+
+  .loghead { display: flex; align-items: center; margin-top: 10px; }
+  .loghead b { flex: 1; }
+  #log { background: #0f1115; border-radius: 10px; padding: 8px; max-height: 50vh; overflow-y: auto; font-size: 12.5px; line-height: 1.5; margin-top: 6px; }
+  .le { padding: 5px 0; border-bottom: 1px solid #22252c; }
+  .le.turn { color: var(--gold); font-weight: 700; border-bottom: 0; padding-top: 10px; }
+  .le.sys { color: var(--muted); font-size: 12px; }
+  .le .why { color: #d7c27a; }
+  .le .res { font-weight: 700; }
+  .le .note { color: var(--muted); font-size: 11.5px; }
+  .tA { color: var(--atk); } .tD { color: var(--def); } .tS { color: var(--skl); }
+  .ok { color: var(--hp); } .ng { color: #e08a4f; }
+
+  /* ---------- 彈窗 ---------- */
+  .modal { position: fixed; inset: 0; background: rgba(0,0,0,.7); display: flex; align-items: flex-start; justify-content: center; z-index: 10; overflow-y: auto; padding: 20px 10px; }
+  .mbox { background: var(--panel); border-radius: 12px; padding: 14px; max-width: 460px; width: 100%; }
+  .mbox h3 { margin: 0 0 10px; }
+  .mbox h4 { margin: 14px 0 6px; color: var(--gold); }
+  .mbox table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  .mbox th, .mbox td { padding: 4px 3px; border-bottom: 1px solid #333; text-align: center; }
+  .mbox th:first-child, .mbox td:first-child { text-align: left; }
+  .mbox .row { display: flex; gap: 6px; margin-top: 14px; }
+  .mbox .row button { flex: 1; padding: 11px; border-radius: 8px; background: var(--panel2); font-weight: 700; }
+  .mbox .row button.pri { background: var(--gold); color: #222; }
+  .pile { display: flex; flex-wrap: wrap; gap: 5px; }
+  .pile .chip { background: var(--panel2); border-radius: 6px; padding: 3px 7px; font-size: 12px; border-left: 3px solid #666; }
+  .chip.attack { border-left-color: var(--atk); } .chip.defense { border-left-color: var(--def); } .chip.skill { border-left-color: var(--skl); }
+  .rules { font-size: 13px; line-height: 1.6; }
+  .rules ul { padding-left: 18px; margin: 4px 0; }
+  /* ---------- 響應式 ---------- */
+  #app { padding-left: max(10px, env(safe-area-inset-left)); padding-right: max(10px, env(safe-area-inset-right)); padding-bottom: max(40px, env(safe-area-inset-bottom)); }
+  @media (max-width: 360px) {           /* 小螢幕手機 */
+    html, body { font-size: 13px; }
+    #app { padding-left: 6px; padding-right: 6px; }
+    .hand { gap: 3px; } .board { gap: 4px; }
+    .card { padding: 3px; } .card .nm { font-size: 12px; } .card .ef { font-size: 8.5px; }
+    .sbtn { padding: 5px 6px; font-size: 11px; }
+  }
+  @media (min-width: 560px) {           /* 大手機橫放／平板 */
+    .card { min-height: 96px; } .hand .card { min-height: 104px; }
+    .card .nm { font-size: 15px; } .card .ef { font-size: 11px; }
+  }
+  @media (min-width: 900px) {           /* 桌機：左邊對戰、右邊紀錄 */
+    #app { max-width: 1040px; }
+    #selectScreen { max-width: 480px; margin: 0 auto; }
+    .gamecols { display: grid; grid-template-columns: 480px 1fr; gap: 16px; align-items: start; }
+    .gside { position: sticky; top: 8px; }
+    .gside .loghead { margin-top: 0; }
+    #log { max-height: calc(100vh - 60px); }
+  }
+  #toast { position: fixed; left: 50%; bottom: 30px; transform: translateX(-50%); background: #000c; padding: 8px 14px; border-radius: 8px; font-size: 13px; z-index: 20; pointer-events: none; transition: opacity .3s; opacity: 0; }
+  #toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+<div id="app">
+  <!-- 角色選擇 -->
+  <div id="selectScreen">
+    <h1>卡牌對決 · 原型</h1>
+    <div class="hint" style="text-align:left">攻擊 &gt; 技巧 &gt; 防禦 &gt; 攻擊</div>
+    <h2>選擇你的角色</h2>
+    <div class="charlist" id="pickMe"></div>
+    <h2>選擇對手角色</h2>
+    <div class="charlist" id="pickOpp"></div>
+    <button class="bigbtn" id="startBtn">開始對戰</button>
+    <button class="sbtn" style="margin-top:12px" onclick="showRules()">規則說明</button>
+  </div>
+
+  <!-- 對戰 -->
+  <div id="gameScreen" class="hidden">
+    <div class="topbar">
+      <span class="turn" id="turnLbl"></span>
+      <button class="sbtn" onclick="showPiles()">棄牌堆</button>
+      <button class="sbtn" onclick="showRules()">規則</button>
+      <button class="sbtn" id="speedBtn" onclick="toggleSpeed()">速度 1x</button>
+      <button class="sbtn" onclick="confirmQuit()">選單</button>
+    </div>
+    <div class="gamecols"><div class="gmain">
+    <div class="pbar" id="oppBar"></div>
+    <div class="board" id="board"></div>
+    <div class="pbar" id="meBar"></div>
+    <div class="hand" id="hand"></div>
+    <div class="hint" id="hint"></div>
+    <button class="actbtn" id="actBtn"></button>
+    </div><div class="gside">
+    <div class="loghead"><b>戰鬥紀錄</b><button class="sbtn" onclick="copyLog()">複製全部紀錄</button></div>
+    <div id="log"></div>
+    </div></div>
+  </div>
+</div>
+<div id="modal" class="modal hidden" onclick="if(event.target===this)closeModal()"><div class="mbox" id="mbox"></div></div>
+<div id="toast"></div>
+
+<script>
+// =====================================================================
+//  共用
+// =====================================================================
+const TYPES = {
+  attack:  { label: '攻擊', short: '攻', beats: 'skill',   cls: 'tA' },
+  skill:   { label: '技巧', short: '技', beats: 'defense', cls: 'tS' },
+  defense: { label: '防禦', short: '防', beats: 'attack',  cls: 'tD' },
+};
+const COND = { prevHit: '前格命中', prevBlock: '前格擋下' };
+const $ = s => document.querySelector(s);
+const def = key => CONFIG.cards[key];
+const bump = (o, k, n = 1) => { o[k] = (o[k] || 0) + n; };
+function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+function sleep(ms) { return new Promise(r => setTimeout(r, ms * (G && G.fast ? CONFIG.ui.fastFactor : 1))); }
+function condMet(cond, prev) { return (cond === 'prevHit' && prev === 'hit') || (cond === 'prevBlock' && prev === 'block'); }
+
+function effText(d, short) {
+  const t = [];
+  if (d.combo) t.push(short ? `${COND[d.combo.cond]} +${d.combo.bonus}` : `${COND[d.combo.cond]}時威力 +${d.combo.bonus}`);
+  if (d.counterOnWin != null) t.push(short ? `勝利時反擊 ${d.counterOnWin}` : `勝利時反擊改為 ${d.counterOnWin}`);
+  if (d.onWinNextAttackBonus) t.push(short ? `勝利後下格攻擊 +${d.onWinNextAttackBonus}` : `勝利後自己下一格攻擊卡威力 +${d.onWinNextAttackBonus}`);
+  return t.join('；');
+}
+function passiveText(pa) {
+  const t = [];
+  if (pa.firstHitBonus) t.push(`每回合第一次命中傷害 +${pa.firstHitBonus}`);
+  if (pa.counterBonus) t.push(`防禦勝利時反擊 +${pa.counterBonus}`);
+  return t.join('；') || '無';
+}
+function cardLabel(key) { const d = def(key); return `<span class="${TYPES[d.type].cls}">${d.name}［${TYPES[d.type].label}］</span>`; }
+function cardHTML(key, extra = '', inner = '') {
+  const d = def(key);
+  return `<div class="card ${d.type} ${extra}"><div class="ctop"><span class="cost">${d.cost}</span><span class="ty">${TYPES[d.type].label}</span></div>
+    <div class="nm">${d.name}</div><div class="pw">威力 <b>${d.power}</b></div><div class="ef">${effText(d, true)}</div>${inner}</div>`;
+}
+function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), 1600); }
+
+// =====================================================================
+//  遊戲狀態
+// =====================================================================
+let G = null;
+let uidSeq = 0;
+
+function makePlayer(idx, charKey) {
+  const ch = CONFIG.characters[charKey];
+  const deck = [];
+  [...CONFIG.commonCards, ...ch.cards].forEach(k => { for (let i = 0; i < CONFIG.copiesPerCard; i++) deck.push({ uid: ++uidSeq, key: k }); });
+  shuffle(deck);
+  return {
+    idx, name: idx === 0 ? '你' : '對手', charKey, ch, hp: ch.hp, maxHp: ch.hp,
+    deck, hand: [], discard: [], slots: Array(CONFIG.slots).fill(null),
+    stats: { use: {}, dmg: {}, eff: {}, hits: 0, blocks: 0, breaks: 0, passive: 0, dmgDealt: 0, shuffles: 0 },
+  };
+}
+const who = p => `${p.name}（${p.ch.name}）`;
+
+function startGame(meKey, oppKey) {
+  const fast = G ? G.fast : false;
+  G = { players: [makePlayer(0, meKey), makePlayer(1, oppKey)], turn: 0, phase: 'select', fast, matchups: {},
+        revealed: [], slotRes: [], slotPow: [], active: -1, anim: -1, over: false, winner: null, lastPick: [meKey, oppKey] };
+  $('#log').innerHTML = '';
+  log(`<div class="le sys">對戰開始：${who(G.players[0])} HP ${G.players[0].hp} 速度 ${G.players[0].ch.speed} ｜ ${who(G.players[1])} HP ${G.players[1].hp} 速度 ${G.players[1].ch.speed}</div>`);
+  $('#selectScreen').classList.add('hidden');
+  $('#gameScreen').classList.remove('hidden');
+  newTurn();
+}
+
+function drawTo(p) {
+  while (p.hand.length < CONFIG.handSize) {
+    if (!p.deck.length) {
+      if (!p.discard.length) break;
+      p.deck = shuffle(p.discard); p.discard = []; p.stats.shuffles++;
+      log(`<div class="le sys">${who(p)} 牌庫用盡，棄牌堆 ${p.deck.length} 張洗回牌庫。</div>`);
+    }
+    p.hand.push(p.deck.pop());
+  }
+}
+
+function newTurn() {
+  G.turn++; G.phase = 'select';
+  G.revealed = Array(CONFIG.slots).fill(false);
+  G.slotRes = Array(CONFIG.slots).fill(null);
+  G.slotPow = Array(CONFIG.slots).fill(null);
+  G.active = -1;
+  log(`<div class="le turn">— 第 ${G.turn} 回合 — 你 HP ${G.players[0].hp} ／ 對手 HP ${G.players[1].hp}</div>`);
+  G.players.forEach(p => { p.slots = Array(CONFIG.slots).fill(null); drawTo(p); });
+  render();
+}
+
+// =====================================================================
+//  出牌合法性
+// =====================================================================
+const slotCost = p => p.slots.reduce((s, c) => s + (c ? def(c.key).cost : 0), 0);
+
+// 所有長度為 k、總費用 ≤ 能量 的「有序」出牌（回傳卡牌陣列的陣列）
+function orderedPlays(cards, k) {
+  const out = [];
+  const used = Array(cards.length).fill(false);
+  (function rec(cur, cost) {
+    if (cur.length === k) { out.push(cur.slice()); return; }
+    for (let i = 0; i < cards.length; i++) {
+      if (used[i]) continue;
+      const c = def(cards[i].key).cost;
+      if (cost + c > CONFIG.energyPerTurn) continue;
+      used[i] = true; cur.push(cards[i]); rec(cur, cost + c); cur.pop(); used[i] = false;
+    }
+  })([], 0);
+  return out;
+}
+// 手牌最多能排幾張（通常是 3；若費用不夠湊滿才會少於 3）
+function maxPlayable(cards) {
+  const costs = cards.map(c => def(c.key).cost).sort((a, b) => a - b);
+  let n = 0, s = 0;
+  for (const c of costs) { if (n >= CONFIG.slots || s + c > CONFIG.energyPerTurn) break; s += c; n++; }
+  return n;
+}
+function lockState(p) {
+  const filled = p.slots.filter(Boolean).length;
+  const need = maxPlayable([...p.hand, ...p.slots.filter(Boolean)]);
+  if (filled >= need) return { ok: true, msg: filled < CONFIG.slots ? `手牌費用無法湊滿 ${CONFIG.slots} 張，可留空格` : '' };
+  const canAdd = p.slots.includes(null) && p.hand.some(c => slotCost(p) + def(c.key).cost <= CONFIG.energyPerTurn);
+  return { ok: false, msg: canAdd ? `點手牌排入格子（還要 ${need - filled} 張）` : `費用超出：這手牌可以排滿 ${need} 張，請調整` };
+}
+
+// =====================================================================
+//  AI：合法出牌中隨機，偏好有組合銜接的排序
+// =====================================================================
+function comboLinks(keys) {
+  let s = 0;
+  for (let i = 1; i < keys.length; i++) {
+    const prev = def(keys[i - 1]), cur = def(keys[i]);
+    if (cur.combo && cur.combo.cond === 'prevHit' && prev.type !== 'defense') s++;
+    if (cur.combo && cur.combo.cond === 'prevBlock' && prev.type === 'defense') s++;
+    if (prev.onWinNextAttackBonus && cur.type === 'attack') s++;
+  }
+  return s;
+}
+function aiChoose(p) {
+  const k = maxPlayable(p.hand);
+  const plays = orderedPlays(p.hand, k);
+  if (!plays.length) return;
+  const w = plays.map(pl => 1 + CONFIG.ai.comboWeight * comboLinks(pl.map(c => c.key)));
+  let r = Math.random() * w.reduce((a, b) => a + b, 0), pick = plays[0];
+  for (let i = 0; i < plays.length; i++) { r -= w[i]; if (r <= 0) { pick = plays[i]; break; } }
+  pick.forEach((c, i) => { p.slots[i] = c; p.hand.splice(p.hand.indexOf(c), 1); });
+}
+
+// =====================================================================
+//  結算
+// =====================================================================
+function newCtx() { return { prev: 'none', breakPen: 0, armed: 0, armedKey: null, hitThisTurn: false }; }
+function eff(p, key, ok) { const e = p.stats.eff[key] || (p.stats.eff[key] = { ok: 0, miss: 0 }); ok ? e.ok++ : e.miss++; }
+
+// 計算某玩家在第 i 格的實際威力（並消耗破防、見切等暫存效果）
+function slotPower(pi, i, ctx) {
+  const p = G.players[pi], c = p.slots[i], x = ctx[pi];
+  const info = { key: c ? c.key : null, base: 0, power: 0, parts: [], notes: [] };
+  if (!c) {
+    if (x.armed) { eff(p, x.armedKey, false); info.notes.push(`${def(x.armedKey).name} 效果落空（本格為空）`); x.armed = 0; }
+    x.breakPen = 0;
+    return info;
+  }
+  const d = def(c.key);
+  let pw = d.power; info.base = pw;
+  bump(p.stats.use, c.key);
+  if (d.combo) {
+    const cn = COND[d.combo.cond];
+    if (i > 0 && condMet(d.combo.cond, x.prev)) {
+      pw += d.combo.bonus; info.parts.push(`<span class="ok">+${d.combo.bonus}（${cn} ✓）</span>`); eff(p, c.key, true);
+    } else {
+      info.notes.push(`<span class="ng">${d.name} 組合落空：${i === 0 ? '位於第 1 格，條件永不成立' : `${cn} ✗（前格${x.prev === 'hit' ? '是命中' : x.prev === 'block' ? '是擋下' : '沒有命中也沒擋下'}）`}</span>`);
+      eff(p, c.key, false);
+    }
+  }
+  if (x.armed) {
+    const an = def(x.armedKey).name;
+    if (d.type === 'attack') { pw += x.armed; info.parts.push(`<span class="ok">+${x.armed}（${an} 效果 ✓）</span>`); eff(p, x.armedKey, true); }
+    else { info.notes.push(`<span class="ng">${an} 效果落空：本格不是攻擊卡</span>`); eff(p, x.armedKey, false); }
+    x.armed = 0;
+  }
+  if (x.breakPen) { pw -= x.breakPen; info.parts.push(`<span class="ng">−${x.breakPen}（被破防）</span>`); x.breakPen = 0; }
+  info.power = Math.max(0, pw);
+  return info;
+}
+
+// 決定勝負：回傳 { w: 0|1|null, how }
+function decide(a, b) {
+  const pa = G.players[0], pb = G.players[1];
+  const ta = a.key && def(a.key).type, tb = b.key && def(b.key).type;
+  if (!ta && !tb) return { w: null, how: 'bothEmpty' };
+  if (!ta || !tb) {
+    const w = ta ? 0 : 1, t = ta || tb;
+    return t === 'defense' ? { w: null, how: 'emptyDef' } : { w, how: 'empty' };
+  }
+  if (TYPES[ta].beats === tb) return { w: 0, how: 'triangle' };
+  if (TYPES[tb].beats === ta) return { w: 1, how: 'triangle' };
+  if (ta === 'defense') return { w: null, how: 'defdef' };
+  if (a.power !== b.power) return { w: a.power > b.power ? 0 : 1, how: 'power' };
+  if (pa.ch.speed !== pb.ch.speed) return { w: pa.ch.speed > pb.ch.speed ? 0 : 1, how: 'speed' };
+  return { w: null, how: 'tie' };
+}
+
+function powerLine(p, info) {
+  if (!info.key) return `<div>${p.name}：<span class="note">（空格）</span></div>`;
+  const tail = info.parts.length ? `${info.base} ${info.parts.join(' ')} = <b>${info.power}</b>` : `<b>${info.power}</b>`;
+  return `<div>${p.name}：${cardLabel(info.key)} 威力 ${tail}</div>`;
+}
+
+function resolveSlot(i, ctx) {
+  const P = G.players;
+  const infos = [slotPower(0, i, ctx), slotPower(1, i, ctx)];
+  const r = decide(infos[0], infos[1]);
+  G.slotPow[i] = [infos[0].power, infos[1].power];
+  const lines = [`<b>第 ${i + 1} 格</b>`, powerLine(P[0], infos[0]), powerLine(P[1], infos[1])];
+  infos.forEach(inf => inf.notes.forEach(n => lines.push(`<div class="note">${n}</div>`)));
+
+  let why = '', res = '', badge = { text: '無事', cls: 'none' };
+  ctx[0].prev = ctx[1].prev = 'none';
+
+  if (r.w === null) {
+    const t = infos[0].key ? TYPES[def(infos[0].key).type].label : '';
+    why = {
+      bothEmpty: '雙方皆為空格',
+      emptyDef: '一方空格、另一方是防禦 → 無事',
+      defdef: '防禦對防禦 → 一律無事',
+      tie: `同為${t}，威力相同（${infos[0].power}）且速度相同（${P[0].ch.speed}）→ 雙方無事`,
+    }[r.how];
+    res = '→ 雙方無事';
+    bump(G.matchups, { defdef: '防禦對防禦（無事）', tie: '同類平手（無事）' }[r.how] || '空格（無事）');
+    // 防禦卡沒有勝利 → 勝利效果落空
+    infos.forEach((inf, pi) => { if (inf.key) { const d = def(inf.key); if (d.counterOnWin != null || d.onWinNextAttackBonus) eff(P[pi], inf.key, false); } });
+  } else {
+    const W = P[r.w], L = P[1 - r.w], wi = infos[r.w], li = infos[1 - r.w], wd = def(wi.key), x = ctx[r.w];
+    const ld = li.key ? def(li.key) : null;
+    if (ld && (ld.counterOnWin != null || ld.onWinNextAttackBonus)) eff(L, li.key, false);
+    const tw = TYPES[wd.type].label;
+    if (r.how === 'triangle') { why = `${tw} 勝 ${TYPES[ld.type].label}（相剋）`; bump(G.matchups, why); }
+    else if (r.how === 'power') { why = `同為${tw}，比威力：${wi.power} > ${li.power}`; bump(G.matchups, '同類比威力'); }
+    else if (r.how === 'speed') { why = `同為${tw}且威力相同（${wi.power}），比速度：${W.ch.speed} > ${L.ch.speed}`; bump(G.matchups, '同類比速度'); }
+    else { why = `${L.name} 空格，${W.name} 直接命中`; bump(G.matchups, '對空格命中'); }
+
+    let dmg, before = L.hp;
+    if (wd.type === 'defense') {
+      // 擋下：不受傷，反擊
+      const parts = [];
+      const base = wd.counterOnWin != null ? wd.counterOnWin : CONFIG.baseCounter;
+      parts.push(wd.counterOnWin != null ? `${wd.name} 反擊 ${base}` : `基本反擊 ${base}`);
+      dmg = base;
+      if (wd.counterOnWin != null) eff(W, wi.key, true);
+      if (W.ch.passive.counterBonus) { dmg += W.ch.passive.counterBonus; parts.push(`${W.ch.name}被動 +${W.ch.passive.counterBonus}`); W.stats.passive++; }
+      if (wd.onWinNextAttackBonus) {
+        x.armed = wd.onWinNextAttackBonus; x.armedKey = wi.key;
+        parts.push(`<span class="ok">${wd.name}：下一格攻擊卡威力 +${wd.onWinNextAttackBonus}</span>`);
+      }
+      x.prev = 'block'; W.stats.blocks++;
+      res = `→ ${W.name}擋下！不受傷，反擊 ${dmg} 傷害（${parts.join('，')}）`;
+      badge = { text: `${W.name}擋下<br>反擊 ${dmg}`, cls: 'win' + r.w };
+    } else {
+      // 命中
+      const parts = [`威力 ${wi.power}`];
+      dmg = wi.power;
+      if (W.ch.passive.firstHitBonus && !x.hitThisTurn) { dmg += W.ch.passive.firstHitBonus; parts.push(`${W.ch.name}被動「本回合首次命中」+${W.ch.passive.firstHitBonus}`); W.stats.passive++; }
+      x.hitThisTurn = true; x.prev = 'hit'; W.stats.hits++;
+      res = `→ ${W.name}命中！${L.name}受到 ${dmg} 傷害（${parts.join(' + ')}）`;
+      badge = { text: `${W.name}命中<br>−${dmg}`, cls: 'win' + r.w };
+      if (wd.type === 'skill' && r.how === 'triangle') {
+        ctx[1 - r.w].breakPen += CONFIG.breakPenalty; W.stats.breaks++;
+        res += `，並且<span class="ng">破防</span>：${L.name}下一格威力 −${CONFIG.breakPenalty}`;
+        badge.text += '<br>破防';
+      }
+    }
+    L.hp = Math.max(0, L.hp - dmg);
+    bump(W.stats.dmg, wi.key, dmg); W.stats.dmgDealt += dmg;
+    res += `。${L.name} HP ${before} → ${L.hp}`;
+    G.flash = L.idx;
+    if (L.hp <= 0) { G.over = true; G.winner = W.idx; }
+  }
+  lines.push(`<div class="why">⚖ ${why}</div>`, `<div class="res">${res}</div>`);
+  log(`<div class="le">${lines.join('')}</div>`);
+  G.slotRes[i] = badge;
+}
+
+async function reveal() {
+  G.phase = 'reveal';
+  const g = G;
+  const ctx = [newCtx(), newCtx()];
+  log(`<div class="le sys">雙方鎖定。你：${G.players[0].slots.map(c => c ? def(c.key).name : '空').join(' → ')} ｜ 對手：（逐格翻開）</div>`);
+  for (let i = 0; i < CONFIG.slots; i++) {
+    G.active = i; G.revealed[i] = true; G.anim = i; render();
+    await sleep(CONFIG.ui.flipDelay);
+    if (G !== g) return;  // 中途回選單或重開
+    resolveSlot(i, ctx); render();
+    if (G.over) break;
+    await sleep(CONFIG.ui.slotDelay);
+    if (G !== g) return;
+  }
+  if (!G.over) {
+    ctx.forEach((x, pi) => { if (x.armed) { eff(G.players[pi], x.armedKey, false); log(`<div class="le sys">${G.players[pi].name}的 ${def(x.armedKey).name} 效果落空（已是最後一格）</div>`); } });
+  }
+  G.players.forEach(p => { p.slots.forEach(c => c && p.discard.push(c)); });
+  G.active = -1;
+  if (G.over) {
+    G.phase = 'over';
+    log(`<div class="le turn">${who(G.players[G.winner])} 獲勝！（第 ${G.turn} 回合）</div>`);
+    render();
+    await sleep(900);
+    if (G === g) showStats();
+  } else {
+    G.phase = 'end';
+    render();
+  }
+}
+
+// =====================================================================
+//  介面
+// =====================================================================
+function log(html) { const el = $('#log'); el.insertAdjacentHTML('beforeend', html); el.scrollTop = el.scrollHeight; }
+
+function pbarHTML(p, isMe) {
+  const pct = Math.max(0, p.hp / p.maxHp * 100);
+  const energy = isMe ? (() => { const used = slotCost(p), left = CONFIG.energyPerTurn - used;
+    return `<div class="energy">能量 <b>${'●'.repeat(Math.max(0, left))}${'○'.repeat(Math.min(CONFIG.energyPerTurn, used))}</b> ${left}/${CONFIG.energyPerTurn}</div>`; })() : '';
+  return `<div class="pline"><span class="pname">${p.name}｜${p.ch.name}</span><span style="font-size:11px;color:var(--muted)">速度 ${p.ch.speed}</span>
+    <span class="pinfo">${isMe ? '' : `手牌 ${p.hand.length}・`}牌庫 ${p.deck.length}・棄牌 ${p.discard.length}</span></div>
+    <div style="font-size:11px;color:var(--muted)">被動：${passiveText(p.ch.passive)}</div>
+    <div class="hpwrap"><div class="hpfill ${pct <= 30 ? 'low' : ''}" style="width:${pct}%"></div><div class="hptext">HP ${p.hp} / ${p.maxHp}</div></div>${energy}`;
+}
+
+function render() {
+  if (!G) return;
+  const [me, op] = G.players;
+  $('#turnLbl').textContent = `第 ${G.turn} 回合`;
+  $('#speedBtn').textContent = G.fast ? '速度 快' : '速度 1x';
+  $('#oppBar').innerHTML = pbarHTML(op, false);
+  $('#meBar').innerHTML = pbarHTML(me, true);
+  ['#oppBar', '#meBar'].forEach((s, k) => { const el = $(s); el.classList.remove('flash'); if (G.flash === (k === 0 ? 1 : 0)) { void el.offsetWidth; el.classList.add('flash'); } });
+  G.flash = null;
+
+  // 戰場
+  let b = '';
+  for (let i = 0; i < CONFIG.slots; i++) {
+    const oc = op.slots[i], mc = me.slots[i], rv = G.revealed[i], pw = G.slotPow[i];
+    let oHTML, mHTML;
+    if (G.phase === 'select') oHTML = `<div class="card back">?</div>`;
+    else if (!rv) oHTML = oc ? `<div class="card back">?</div>` : `<div class="card empty">空</div>`;
+    else oHTML = oc ? cardHTML(oc.key, G.anim === i ? 'flip' : '', pw ? `<span class="final">${pw[1]}</span>` : '') : `<div class="card empty">空</div>`;
+    mHTML = mc ? cardHTML(mc.key, '', pw ? `<span class="final">${pw[0]}</span>` : '') : `<div class="card empty">${G.phase === 'select' ? '點手牌放入' : '空'}</div>`;
+    const res = G.slotRes[i];
+    const badge = res ? `<div class="badge ${res.cls}">${res.text}</div>` : `<div class="badge none">${rv ? '…' : 'VS'}</div>`;
+    b += `<div class="slotcol ${G.active === i ? 'active' : ''}"><div class="slotlbl">第 ${i + 1} 格</div>${oHTML}${badge}<div data-slot="${i}">${mHTML}</div></div>`;
+  }
+  $('#board').innerHTML = b;
+  G.anim = -1;
+
+  // 手牌
+  const left = CONFIG.energyPerTurn - slotCost(me);
+  $('#hand').innerHTML = me.hand.map(c => {
+    const dim = G.phase !== 'select' || def(c.key).cost > left || !me.slots.includes(null);
+    return `<div data-uid="${c.uid}">${cardHTML(c.key, dim ? 'dim' : '')}</div>`;
+  }).join('');
+
+  // 按鈕
+  const btn = $('#actBtn'), hint = $('#hint');
+  if (G.phase === 'select') {
+    const ls = lockState(me);
+    btn.disabled = !ls.ok; btn.textContent = '鎖定出牌'; hint.textContent = ls.msg || '點格子中的卡可收回';
+  } else if (G.phase === 'reveal') {
+    btn.disabled = true; btn.textContent = '翻牌結算中…'; hint.textContent = '';
+  } else if (G.phase === 'end') {
+    btn.disabled = false; btn.textContent = '下一回合 ▶'; hint.textContent = '可往下查看戰鬥紀錄';
+  } else {
+    btn.disabled = false; btn.textContent = '查看對局統計'; hint.textContent = `${who(G.players[G.winner])} 獲勝`;
+  }
+}
+
+$('#hand').addEventListener('click', e => {
+  const el = e.target.closest('[data-uid]'); if (!el || G.phase !== 'select') return;
+  const me = G.players[0], c = me.hand.find(c => c.uid === +el.dataset.uid);
+  const si = me.slots.indexOf(null);
+  if (si < 0) return toast('三格已滿，點格子中的卡可收回');
+  if (slotCost(me) + def(c.key).cost > CONFIG.energyPerTurn) return toast('能量不足');
+  me.hand.splice(me.hand.indexOf(c), 1); me.slots[si] = c; render();
+});
+$('#board').addEventListener('click', e => {
+  const el = e.target.closest('[data-slot]'); if (!el || G.phase !== 'select') return;
+  const me = G.players[0], i = +el.dataset.slot;
+  if (me.slots[i]) { me.hand.push(me.slots[i]); me.slots[i] = null; render(); }
+});
+$('#actBtn').addEventListener('click', () => {
+  if (G.phase === 'select') { if (!lockState(G.players[0]).ok) return; aiChoose(G.players[1]); reveal(); }
+  else if (G.phase === 'end') newTurn();
+  else if (G.phase === 'over') showStats();
+});
+
+function toggleSpeed() { if (G) { G.fast = !G.fast; render(); } }
+
+// ---------- 彈窗 ----------
+function openModal(html) { $('#mbox').innerHTML = html; $('#modal').classList.remove('hidden'); }
+function closeModal() { $('#modal').classList.add('hidden'); }
+
+function pileHTML(cards) {
+  if (!cards.length) return '<div class="note" style="color:var(--muted)">（空）</div>';
+  const cnt = {}; cards.forEach(c => bump(cnt, c.key));
+  return `<div class="pile">${Object.keys(cnt).map(k => `<span class="chip ${def(k).type}">${def(k).name} ×${cnt[k]}</span>`).join('')}</div>`;
+}
+function showPiles() {
+  if (!G) return;
+  const [me, op] = G.players;
+  openModal(`<h3>棄牌堆（公開資訊）</h3>
+    <h4>對手（${op.ch.name}）棄牌 ${op.discard.length} 張・牌庫 ${op.deck.length} 張</h4>${pileHTML(op.discard)}
+    <h4>你（${me.ch.name}）棄牌 ${me.discard.length} 張・牌庫 ${me.deck.length} 張</h4>${pileHTML(me.discard)}
+    <h4>你的牌庫剩餘內容（順序未知）</h4>${pileHTML(me.deck)}
+    <div class="row"><button class="pri" onclick="closeModal()">關閉</button></div>`);
+}
+
+function showRules() {
+  const C = CONFIG;
+  const cardRow = k => { const d = def(k); return `<li>${cardLabel(k)} 費${d.cost}｜威力${d.power}${effText(d) ? '｜' + effText(d) : ''}</li>`; };
+  openModal(`<h3>規則</h3><div class="rules">
+    <ul><li>牌庫 ${C.commonCards.length + 2} 種 ×${C.copiesPerCard}，開局抽 ${C.handSize}，每回合補到 ${C.handSize}。牌庫空了洗棄牌堆。</li>
+    <li>每回合 ${C.energyPerTurn} 能量，選 ${C.slots} 張排入 1～${C.slots} 格（總費用 ≤ ${C.energyPerTurn}），鎖定後依序逐格翻開對決。</li>
+    <li><span class="tA">攻擊</span> 勝 <span class="tS">技巧</span>：命中，造成威力傷害。</li>
+    <li><span class="tS">技巧</span> 勝 <span class="tD">防禦</span>：命中，造成威力傷害，且對手下一格威力 −${C.breakPenalty}（破防）。</li>
+    <li><span class="tD">防禦</span> 勝 <span class="tA">攻擊</span>：不受傷，反擊 ${C.baseCounter}（擋下）。</li>
+    <li>同類型：威力高者命中；平手比速度；再平手無事。防禦對防禦一律無事。</li>
+    <li>組合條件看自己前一格：「前格命中」／「前格擋下」。第 1 格的組合永遠不成立。</li></ul>
+    <h4>通用卡</h4><ul>${C.commonCards.map(cardRow).join('')}</ul>
+    ${Object.values(C.characters).map(ch => `<h4>${ch.name}：HP ${ch.hp}・速度 ${ch.speed}</h4><div>被動：${passiveText(ch.passive)}</div><ul>${ch.cards.map(cardRow).join('')}</ul>`).join('')}
+    </div><div class="row"><button class="pri" onclick="closeModal()">關閉</button></div>`);
+}
+
+function showStats() {
+  const P = G.players;
+  const keysOf = p => [...CONFIG.commonCards, ...p.ch.cards];
+  const table = p => {
+    const rows = keysOf(p).map(k => {
+      const e = p.stats.eff[k];
+      const hasEff = def(k).combo || def(k).counterOnWin != null || def(k).onWinNextAttackBonus;
+      return `<tr><td>${cardLabel(k)}</td><td>${p.stats.use[k] || 0}</td><td>${p.stats.dmg[k] || 0}</td>
+        <td>${hasEff ? `<span class="ok">${e ? e.ok : 0}</span> / <span class="ng">${e ? e.miss : 0}</span>` : '—'}</td></tr>`;
+    }).join('');
+    const s = p.stats;
+    return `<h4>${who(p)}　HP ${p.hp}/${p.maxHp}</h4>
+      <div style="font-size:12px;margin-bottom:6px">命中 ${s.hits}・擋下 ${s.blocks}・破防 ${s.breaks}・被動觸發 ${s.passive}・總傷害 ${s.dmgDealt}・洗牌 ${s.shuffles}</div>
+      <table><tr><th>卡牌</th><th>使用</th><th>傷害</th><th>組合/效果<br>觸發/落空</th></tr>${rows}</table>`;
+  };
+  const mu = Object.entries(G.matchups).map(([k, v]) => `<tr><td>${k}</td><td>${v}</td></tr>`).join('');
+  openModal(`<h3>${G.winner === 0 ? '🏆 你贏了' : '💀 你輸了'}（${G.turn} 回合）</h3>
+    ${table(P[0])}${table(P[1])}
+    <h4>各格結算類型</h4><table><tr><th>結果</th><th>次數</th></tr>${mu}</table>
+    <div class="note" style="font-size:11px;color:var(--muted);margin-top:8px">「觸發/落空」：組合卡看條件是否成立；招架看是否勝利；見切看勝利後下一格是否接到攻擊卡。傷害含反擊。</div>
+    <div class="row"><button onclick="copyLog()">複製紀錄</button><button onclick="closeModal();toSelect()">重選角色</button>
+    <button class="pri" onclick="closeModal();startGame(...G.lastPick)">再來一局</button></div>`);
+}
+
+function copyLog() {
+  let text = $('#log').innerText;
+  if (G && G.over) {
+    text += '\n\n=== 統計 ===\n' + G.players.map(p => `${who(p)} HP ${p.hp}：` + [...CONFIG.commonCards, ...p.ch.cards].map(k => {
+      const e = p.stats.eff[k]; return `${def(k).name} 用${p.stats.use[k] || 0} 傷${p.stats.dmg[k] || 0}${e ? ` 觸${e.ok}/落${e.miss}` : ''}`; }).join('，')).join('\n');
+  }
+  const done = () => toast('已複製到剪貼簿');
+  if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(text).then(done, () => fallbackCopy(text, done));
+  else fallbackCopy(text, done);
+}
+function fallbackCopy(text, done) {
+  const ta = document.createElement('textarea'); ta.value = text; document.body.appendChild(ta); ta.select();
+  try { document.execCommand('copy'); done(); } catch (e) { toast('複製失敗'); } ta.remove();
+}
+
+function confirmQuit() {
+  openModal(`<h3>回到選單？</h3><div>目前對局會結束。</div>
+    <div class="row"><button onclick="closeModal()">取消</button><button class="pri" onclick="closeModal();toSelect()">回選單</button></div>`);
+}
+
+// ---------- 角色選擇 ----------
+let pick = { me: 'swordsman', opp: 'random' };
+function charOptHTML(key, sel, group) {
+  const ch = CONFIG.characters[key];
+  return `<button class="charopt ${sel ? 'sel' : ''}" data-g="${group}" data-k="${key}">
+    <div class="cn">${ch.name}</div><div class="cs">HP ${ch.hp}・速度 ${ch.speed}・被動：${passiveText(ch.passive)}</div>
+    <div class="cc">${ch.cards.map(k => `${cardLabel(k)} 費${def(k).cost} 威力${def(k).power}${effText(def(k)) ? '｜' + effText(def(k)) : ''}`).join('<br>')}</div></button>`;
+}
+function renderSelect() {
+  const keys = Object.keys(CONFIG.characters);
+  $('#pickMe').innerHTML = keys.map(k => charOptHTML(k, pick.me === k, 'me')).join('');
+  $('#pickOpp').innerHTML = keys.map(k => charOptHTML(k, pick.opp === k, 'opp')).join('') +
+    `<button class="charopt ${pick.opp === 'random' ? 'sel' : ''}" data-g="opp" data-k="random"><div class="cn">隨機</div></button>`;
+}
+$('#selectScreen').addEventListener('click', e => {
+  const el = e.target.closest('[data-g]'); if (!el) return;
+  pick[el.dataset.g] = el.dataset.k; renderSelect();
+});
+$('#startBtn').addEventListener('click', () => {
+  const keys = Object.keys(CONFIG.characters);
+  const opp = pick.opp === 'random' ? keys[Math.floor(Math.random() * keys.length)] : pick.opp;
+  startGame(pick.me, opp);
+});
+function toSelect() {
+  G = null;  // 讓進行中的翻牌流程停止
+  $('#gameScreen').classList.add('hidden'); $('#selectScreen').classList.remove('hidden'); renderSelect();
+}
+renderSelect();
+</script>
+</body>
+</html>
