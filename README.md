@@ -1,13 +1,20 @@
 # card-duel
 
-卡牌對戰遊戲的可玩原型（單一 `index.html`，原生 JS，手機直式可玩、桌機自動改成左右兩欄）。
+卡牌對戰的可玩原型：單一 `index.html`、原生 JS，手機直式可玩，桌機會自動改成左右兩欄。
 
 ## 玩法
-直接用瀏覽器打開 `index.html`，或開 GitHub Pages 網址：
-`https://dan0618x.github.io/card-duel/`
+用手機打開 GitHub Pages：`https://dan0618x.github.io/card-duel/`
+
+- 冒險有 3 張地圖，每張 10 步、3 條路線，最後一步打王
+- 主角每回合出 3 張戰鬥卡；輔助角色每人出 1 張輔助卡，在翻牌前先掀開
+- 每打完一張地圖，從 9 位角色中隨機抽 3 位、選 1 位加入隊伍，再重新決定誰當主角
+- 成長方式：
+  - 普通戰鬥勝利：主角提升
+  - 精英、寶箱、王：裝備
+  - 祝福點：暫時增益
 
 ## 調數字
-所有卡牌、角色、數值都在 `index.html` 最上面的 `CONFIG` 物件，改完重新整理即可。
+所有卡牌、角色、怪物、地圖、裝備、數值都在 `index.html` 最上面的 `CONFIG` 物件，改完重新整理即可。
 
-## GitHub Pages 設定
-Settings → Pages → Source 選 **Deploy from a branch**，分支 `main`、資料夾 `/ (root)`。之後每次推到 `main` 都會自動更新網站。
+## 部署
+GitHub Pages 設定成從 `main` 分支的根目錄發布（Settings → Pages → Deploy from a branch）。合併進 `main` 後一兩分鐘網站就會更新。
