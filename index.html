@@ -16,10 +16,19 @@ const CONFIG = {
   baseCounter: 1,       // 防禦勝利的基本反擊傷害
   breakPenalty: 1,      // 破防：對手下一格威力減少多少
 
-  // type: attack 攻擊 / defense 防禦 / skill 技巧
+  // 攻擊對攻擊的結算方式（開局畫面也可以切換）
+  //   'higher' 威力高者命中，造成自己的威力傷害
+  //   'mutual' 互相傷害：雙方都命中，各自受到對方威力的傷害
+  //   'diff'   高減低：威力高者命中，傷害 = 威力差
+  attackClash: 'mutual',
+  useDodge: true,       // 是否把 extraCards（閃避）加入牌庫（開局畫面也可以切換）
+
+  // type: attack 攻擊 / defense 防禦 / skill 技巧 / dodge 閃避（不在三角相剋內）
+
   // combo: { cond: 'prevHit' 前格命中 | 'prevBlock' 前格擋下, bonus: 威力加成 }
   // counterOnWin: 防禦勝利時的反擊值（取代 baseCounter）
   // onWinNextAttackBonus: 勝利後自己下一格若為攻擊卡，威力加成
+  // dodgeChance: 閃避成功率（0~1）；dodgeSkill: true 時對技巧也能擲骰閃避
   cards: {
     stab:   { name: '刺擊',   type: 'attack',  cost: 0, power: 2 },
     heavy:  { name: '重擊',   type: 'attack',  cost: 2, power: 4 },
@@ -27,6 +36,7 @@ const CONFIG = {
     block:  { name: '格擋',   type: 'defense', cost: 0, power: 1 },
     parry:  { name: '招架',   type: 'defense', cost: 1, power: 2, counterOnWin: 2 },
     grab:   { name: '擒拿',   type: 'skill',   cost: 1, power: 2 },
+    dodge:  { name: '閃避',   type: 'dodge',   cost: 0, power: 0, dodgeChance: 0.5, dodgeSkill: true },
     // 劍士專屬
     slash:  { name: '連斬',   type: 'attack',  cost: 1, power: 1, combo: { cond: 'prevHit', bonus: 4 } },
     mikiri: { name: '見切',   type: 'defense', cost: 1, power: 2, onWinNextAttackBonus: 2 },
@@ -35,6 +45,7 @@ const CONFIG = {
     tetsu:  { name: '鐵山靠', type: 'skill',   cost: 1, power: 2, combo: { cond: 'prevBlock', bonus: 3 } },
   },
   commonCards: ['stab', 'heavy', 'chase', 'block', 'parry', 'grab'],
+  extraCards: ['dodge'],   // useDodge 開啟時加入牌庫（每種 copiesPerCard 張）
 
   // passive.firstHitBonus: 每回合第一次命中傷害加成
   // passive.counterBonus:  防禦勝利時反擊加成
@@ -57,7 +68,7 @@ const CONFIG = {
 <style>
   :root {
     --bg: #14161c; --panel: #1f232c; --panel2: #2a2f3a; --text: #e8e8ec; --muted: #9aa0ac;
-    --atk: #e0564f; --def: #4b8fe0; --skl: #3fb67a; --gold: #f0c04a; --hp: #4fc36b;
+    --atk: #e0564f; --def: #4b8fe0; --skl: #3fb67a; --dge: #b07ce8; --gold: #f0c04a; --hp: #4fc36b;
   }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body { margin: 0; background: var(--bg); color: var(--text);
@@ -82,32 +93,38 @@ const CONFIG = {
   .topbar { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
   .topbar .turn { font-weight: 700; flex: 1; }
   .sbtn { background: var(--panel2); padding: 6px 9px; border-radius: 7px; font-size: 12px; }
-  .pbar { background: var(--panel); border-radius: 10px; padding: 7px 10px; }
-  .pbar.flash { animation: flash .5s; }
-  @keyframes flash { 0%,100% { background: var(--panel); } 30% { background: #6b2323; } }
-  .pline { display: flex; align-items: baseline; gap: 8px; }
-  .pname { font-weight: 700; }
-  .pinfo { color: var(--muted); font-size: 12px; margin-left: auto; text-align: right; }
-  .hpwrap { position: relative; height: 14px; background: #333; border-radius: 7px; margin-top: 5px; overflow: hidden; }
+
+  /* 戰場：左＝我方出牌、中＝雙方角色（HP 在頭上）、右＝敵方出牌 */
+  .arena { display: grid; grid-template-columns: minmax(0,1fr) 62px 62px minmax(0,1fr); grid-template-rows: auto repeat(3, minmax(80px, auto)); gap: 6px; margin: 8px 0; }
+  .colhdr { font-size: 11px; color: var(--muted); align-self: end; text-align: center; line-height: 1.3; }
+  .colhdr b { color: var(--text); }
+  .hpbox { grid-row: 1; align-self: end; font-size: 11px; text-align: center; font-weight: 700; }
+  .hpwrap { position: relative; height: 8px; margin-top: 2px; background: #333; border-radius: 4px; overflow: hidden; }
   .hpfill { height: 100%; background: var(--hp); transition: width .4s; }
   .hpfill.low { background: var(--atk); }
-  .hptext { position: absolute; inset: 0; font-size: 11px; line-height: 14px; text-align: center; font-weight: 700; text-shadow: 0 0 2px #000; }
-  .energy { margin-top: 5px; font-size: 12px; color: var(--muted); }
+  .fighter { grid-row: 2 / span 3; border-radius: 12px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; color: #222; font-weight: 800; cursor: pointer; }
+  .fighter.me { grid-column: 2; background: #f5c242; } .fighter.op { grid-column: 3; background: #f0457f; }
+  .fighter .glyph { font-size: 30px; line-height: 1; } .fighter .fn { font-size: 11px; }
+  .fighter.dead { filter: grayscale(1) brightness(.6); }
+  .fighter.flash { animation: hurt .5s; }
+  @keyframes hurt { 25% { filter: brightness(1.9); transform: translateX(-4px); } 60% { transform: translateX(4px); } }
+  .slot { display: flex; min-width: 0; } .slot > .card { flex: 1; min-width: 0; }
+  .slot.active > .card { outline: 2px solid var(--gold); outline-offset: 1px; }
+  .badge { min-height: 34px; display: flex; align-items: center; justify-content: center; text-align: center; font-size: 11px; font-weight: 700; border-radius: 6px; padding: 3px 2px; line-height: 1.25; }
+  .rowbadge { grid-column: 2 / span 2; align-self: center; z-index: 2; margin: 0 3px; box-shadow: 0 2px 8px #000a; }
+  .badge.win0 { background: #2b4a33; } .badge.win1 { background: #5a2b2b; } .badge.none { background: #2a2d35; color: var(--muted); } .badge.mutual { background: #4b3a63; }
+  .energy { font-size: 12px; color: var(--muted); text-align: center; }
   .energy b { color: var(--gold); letter-spacing: 2px; }
-
-  .board { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin: 8px 0; }
-  .slotcol { background: #191c23; border-radius: 10px; padding: 5px; display: flex; flex-direction: column; gap: 4px; border: 2px solid transparent; }
-  .slotcol.active { border-color: var(--gold); }
-  .slotlbl { text-align: center; font-size: 11px; color: var(--muted); }
-  .badge { min-height: 34px; display: flex; align-items: center; justify-content: center; text-align: center; font-size: 11px; font-weight: 700; border-radius: 6px; padding: 2px; line-height: 1.25; }
-  .badge.win0 { background: #2b4a33; } .badge.win1 { background: #5a2b2b; } .badge.none { background: #2a2d35; color: var(--muted); }
-
+  .optrow { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+  .optrow .lbl { width: 100%; font-size: 12px; color: var(--muted); }
+  .optrow button { flex: 1; background: var(--panel); border: 2px solid transparent; border-radius: 8px; padding: 8px 4px; font-size: 13px; }
+  .optrow button.sel { border-color: var(--gold); }
   .card { position: relative; border-radius: 8px; padding: 4px 5px; background: var(--panel2); border-top: 4px solid #666; min-height: 82px; display: flex; flex-direction: column; text-align: left; width: 100%; }
-  .card.attack { border-top-color: var(--atk); } .card.defense { border-top-color: var(--def); } .card.skill { border-top-color: var(--skl); }
+  .card.attack { border-top-color: var(--atk); } .card.defense { border-top-color: var(--def); } .card.skill { border-top-color: var(--skl); } .card.dodge { border-top-color: var(--dge); }
   .card .ctop { display: flex; justify-content: space-between; font-size: 10px; }
   .card .cost { background: var(--gold); color: #222; border-radius: 50%; width: 16px; height: 16px; text-align: center; line-height: 16px; font-weight: 700; }
   .card .ty { font-weight: 700; }
-  .card.attack .ty { color: var(--atk); } .card.defense .ty { color: var(--def); } .card.skill .ty { color: var(--skl); }
+  .card.attack .ty { color: var(--atk); } .card.defense .ty { color: var(--def); } .card.skill .ty { color: var(--skl); } .card.dodge .ty { color: var(--dge); }
   .card .nm { font-weight: 700; font-size: 13px; margin-top: 2px; }
   .card .pw { font-size: 11px; color: var(--muted); }
   .card .pw b { color: var(--text); font-size: 14px; }
@@ -134,7 +151,7 @@ const CONFIG = {
   .le .why { color: #d7c27a; }
   .le .res { font-weight: 700; }
   .le .note { color: var(--muted); font-size: 11.5px; }
-  .tA { color: var(--atk); } .tD { color: var(--def); } .tS { color: var(--skl); }
+  .tA { color: var(--atk); } .tD { color: var(--def); } .tS { color: var(--skl); } .tG { color: var(--dge); }
   .ok { color: var(--hp); } .ng { color: #e08a4f; }
 
   /* ---------- 彈窗 ---------- */
@@ -150,7 +167,7 @@ const CONFIG = {
   .mbox .row button.pri { background: var(--gold); color: #222; }
   .pile { display: flex; flex-wrap: wrap; gap: 5px; }
   .pile .chip { background: var(--panel2); border-radius: 6px; padding: 3px 7px; font-size: 12px; border-left: 3px solid #666; }
-  .chip.attack { border-left-color: var(--atk); } .chip.defense { border-left-color: var(--def); } .chip.skill { border-left-color: var(--skl); }
+  .chip.attack { border-left-color: var(--atk); } .chip.defense { border-left-color: var(--def); } .chip.skill { border-left-color: var(--skl); } .chip.dodge { border-left-color: var(--dge); }
   .rules { font-size: 13px; line-height: 1.6; }
   .rules ul { padding-left: 18px; margin: 4px 0; }
   /* ---------- 響應式 ---------- */
@@ -158,7 +175,7 @@ const CONFIG = {
   @media (max-width: 360px) {           /* 小螢幕手機 */
     html, body { font-size: 13px; }
     #app { padding-left: 6px; padding-right: 6px; }
-    .hand { gap: 3px; } .board { gap: 4px; }
+    .hand { gap: 3px; } .arena { gap: 4px; grid-template-columns: minmax(0,1fr) 52px 52px minmax(0,1fr); }
     .card { padding: 3px; } .card .nm { font-size: 12px; } .card .ef { font-size: 8.5px; }
     .sbtn { padding: 5px 6px; font-size: 11px; }
   }
@@ -173,6 +190,8 @@ const CONFIG = {
     .gside { position: sticky; top: 8px; }
     .gside .loghead { margin-top: 0; }
     #log { max-height: calc(100vh - 60px); }
+    .arena { grid-template-columns: minmax(0,1fr) 80px 80px minmax(0,1fr); }
+    .fighter .glyph { font-size: 40px; }
   }
   #toast { position: fixed; left: 50%; bottom: 30px; transform: translateX(-50%); background: #000c; padding: 8px 14px; border-radius: 8px; font-size: 13px; z-index: 20; pointer-events: none; transition: opacity .3s; opacity: 0; }
   #toast.show { opacity: 1; }
@@ -188,6 +207,8 @@ const CONFIG = {
     <div class="charlist" id="pickMe"></div>
     <h2>選擇對手角色</h2>
     <div class="charlist" id="pickOpp"></div>
+    <h2>規則實驗</h2>
+    <div id="pickRules"></div>
     <button class="bigbtn" id="startBtn">開始對戰</button>
     <button class="sbtn" style="margin-top:12px" onclick="showRules()">規則說明</button>
   </div>
@@ -202,9 +223,8 @@ const CONFIG = {
       <button class="sbtn" onclick="confirmQuit()">選單</button>
     </div>
     <div class="gamecols"><div class="gmain">
-    <div class="pbar" id="oppBar"></div>
-    <div class="board" id="board"></div>
-    <div class="pbar" id="meBar"></div>
+    <div class="arena" id="board"></div>
+    <div class="energy" id="energy"></div>
     <div class="hand" id="hand"></div>
     <div class="hint" id="hint"></div>
     <button class="actbtn" id="actBtn"></button>
@@ -225,7 +245,10 @@ const TYPES = {
   attack:  { label: '攻擊', short: '攻', beats: 'skill',   cls: 'tA' },
   skill:   { label: '技巧', short: '技', beats: 'defense', cls: 'tS' },
   defense: { label: '防禦', short: '防', beats: 'attack',  cls: 'tD' },
+  dodge:   { label: '閃避', short: '閃', beats: null,      cls: 'tG' },
 };
+const CLASH = { higher: '比威力', mutual: '互相傷害', diff: '高減低' };
+const deckKeys = ch => [...CONFIG.commonCards, ...(CONFIG.useDodge ? CONFIG.extraCards : []), ...ch.cards];
 const COND = { prevHit: '前格命中', prevBlock: '前格擋下' };
 const $ = s => document.querySelector(s);
 const def = key => CONFIG.cards[key];
@@ -238,6 +261,8 @@ function effText(d, short) {
   const t = [];
   if (d.combo) t.push(short ? `${COND[d.combo.cond]} +${d.combo.bonus}` : `${COND[d.combo.cond]}時威力 +${d.combo.bonus}`);
   if (d.counterOnWin != null) t.push(short ? `勝利時反擊 ${d.counterOnWin}` : `勝利時反擊改為 ${d.counterOnWin}`);
+  if (d.dodgeChance != null) { const pct = Math.round(d.dodgeChance * 100), vs = d.dodgeSkill ? '攻擊或技巧' : '攻擊';
+    t.push(short ? `可躲${d.dodgeSkill ? '攻擊、技巧' : '攻擊'}` : `對手出${vs}時擲骰，${pct}% 機率完全閃開；失敗則被命中`); }
   if (d.onWinNextAttackBonus) t.push(short ? `勝利後下格攻擊 +${d.onWinNextAttackBonus}` : `勝利後自己下一格攻擊卡威力 +${d.onWinNextAttackBonus}`);
   return t.join('；');
 }
@@ -250,8 +275,9 @@ function passiveText(pa) {
 function cardLabel(key) { const d = def(key); return `<span class="${TYPES[d.type].cls}">${d.name}［${TYPES[d.type].label}］</span>`; }
 function cardHTML(key, extra = '', inner = '') {
   const d = def(key);
+  if (d.type === 'dodge') inner = inner.replace(/<span class="final">.*?<\/span>/, '');
   return `<div class="card ${d.type} ${extra}"><div class="ctop"><span class="cost">${d.cost}</span><span class="ty">${TYPES[d.type].label}</span></div>
-    <div class="nm">${d.name}</div><div class="pw">威力 <b>${d.power}</b></div><div class="ef">${effText(d, true)}</div>${inner}</div>`;
+    <div class="nm">${d.name}</div><div class="pw">${d.dodgeChance != null ? `閃避 <b>${Math.round(d.dodgeChance * 100)}%</b>` : `威力 <b>${d.power}</b>`}</div><div class="ef">${effText(d, true)}</div>${inner}</div>`;
 }
 function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), 1600); }
 
@@ -264,21 +290,23 @@ let uidSeq = 0;
 function makePlayer(idx, charKey) {
   const ch = CONFIG.characters[charKey];
   const deck = [];
-  [...CONFIG.commonCards, ...ch.cards].forEach(k => { for (let i = 0; i < CONFIG.copiesPerCard; i++) deck.push({ uid: ++uidSeq, key: k }); });
+  deckKeys(ch).forEach(k => { for (let i = 0; i < CONFIG.copiesPerCard; i++) deck.push({ uid: ++uidSeq, key: k }); });
   shuffle(deck);
   return {
     idx, name: idx === 0 ? '你' : '對手', charKey, ch, hp: ch.hp, maxHp: ch.hp,
     deck, hand: [], discard: [], slots: Array(CONFIG.slots).fill(null),
-    stats: { use: {}, dmg: {}, eff: {}, hits: 0, blocks: 0, breaks: 0, passive: 0, dmgDealt: 0, shuffles: 0 },
+    stats: { use: {}, dmg: {}, eff: {}, hits: 0, blocks: 0, breaks: 0, dodges: 0, passive: 0, dmgDealt: 0, shuffles: 0 },
   };
 }
 const who = p => `${p.name}（${p.ch.name}）`;
+const resultText = () => G.winner < 0 ? '雙方同時倒下，平手！' : `${who(G.players[G.winner])} 獲勝！`;
 
 function startGame(meKey, oppKey) {
   const fast = G ? G.fast : false;
   G = { players: [makePlayer(0, meKey), makePlayer(1, oppKey)], turn: 0, phase: 'select', fast, matchups: {},
-        revealed: [], slotRes: [], slotPow: [], active: -1, anim: -1, over: false, winner: null, lastPick: [meKey, oppKey] };
+        revealed: [], slotRes: [], slotPow: [], active: -1, anim: -1, flash: [], over: false, winner: null, lastPick: [meKey, oppKey] };
   $('#log').innerHTML = '';
+  log(`<div class="le sys">規則：攻擊對攻擊＝${CLASH[CONFIG.attackClash]}・閃避卡${CONFIG.useDodge ? '加入' : '不加入'}（牌庫 ${deckKeys(G.players[0].ch).length * CONFIG.copiesPerCard} 張）</div>`);
   log(`<div class="le sys">對戰開始：${who(G.players[0])} HP ${G.players[0].hp} 速度 ${G.players[0].ch.speed} ｜ ${who(G.players[1])} HP ${G.players[1].hp} 速度 ${G.players[1].ch.speed}</div>`);
   $('#selectScreen').classList.add('hidden');
   $('#gameScreen').classList.remove('hidden');
@@ -403,11 +431,21 @@ function slotPower(pi, i, ctx) {
   return info;
 }
 
-// 決定勝負：回傳 { w: 0|1|null, how }
+// 決定勝負：回傳 { w: 0|1|null, how, roll?, need? }
 function decide(a, b) {
   const pa = G.players[0], pb = G.players[1];
   const ta = a.key && def(a.key).type, tb = b.key && def(b.key).type;
   if (!ta && !tb) return { w: null, how: 'bothEmpty' };
+  if (ta === 'dodge' || tb === 'dodge') {
+    if (ta === tb) return { w: null, how: 'dodgeBoth' };
+    const di = ta === 'dodge' ? 0 : 1, ot = di === 0 ? tb : ta, dd = def((di === 0 ? a : b).key);
+    if (!ot || ot === 'defense') return { w: null, how: 'dodgeIdle' };
+    if (ot === 'attack' || dd.dodgeSkill) {
+      const roll = Math.floor(Math.random() * 100) + 1, need = Math.round(dd.dodgeChance * 100);
+      return roll <= need ? { w: di, how: 'dodge', roll, need } : { w: 1 - di, how: 'dodgeFail', roll, need };
+    }
+    return { w: 1 - di, how: 'vsDodge' };
+  }
   if (!ta || !tb) {
     const w = ta ? 0 : 1, t = ta || tb;
     return t === 'defense' ? { w: null, how: 'emptyDef' } : { w, how: 'empty' };
@@ -415,9 +453,31 @@ function decide(a, b) {
   if (TYPES[ta].beats === tb) return { w: 0, how: 'triangle' };
   if (TYPES[tb].beats === ta) return { w: 1, how: 'triangle' };
   if (ta === 'defense') return { w: null, how: 'defdef' };
+  if (ta === 'attack' && CONFIG.attackClash === 'mutual') return { w: null, how: 'mutual' };
+  if (ta === 'attack' && CONFIG.attackClash === 'diff') {
+    if (a.power === b.power) return { w: null, how: 'diffTie' };
+    return { w: a.power > b.power ? 0 : 1, how: 'diff' };
+  }
   if (a.power !== b.power) return { w: a.power > b.power ? 0 : 1, how: 'power' };
   if (pa.ch.speed !== pb.ch.speed) return { w: pa.ch.speed > pb.ch.speed ? 0 : 1, how: 'speed' };
   return { w: null, how: 'tie' };
+}
+
+// 造成傷害（命中與反擊共用）
+function dealDamage(W, L, key, dmg) {
+  const before = L.hp;
+  L.hp = Math.max(0, L.hp - dmg);
+  bump(W.stats.dmg, key, dmg); W.stats.dmgDealt += dmg;
+  G.flash.push(L.idx);
+  return { dmg, before };
+}
+// 命中：套用劍士被動、記錄「前格命中」
+function applyHit(W, L, key, base, ctx, parts) {
+  const x = ctx[W.idx];
+  let dmg = base;
+  if (W.ch.passive.firstHitBonus && !x.hitThisTurn) { dmg += W.ch.passive.firstHitBonus; parts.push(`${W.ch.name}被動「本回合首次命中」+${W.ch.passive.firstHitBonus}`); W.stats.passive++; }
+  x.hitThisTurn = true; x.prev = 'hit'; W.stats.hits++;
+  return dealDamage(W, L, key, dmg);
 }
 
 function powerLine(p, info) {
@@ -433,39 +493,57 @@ function resolveSlot(i, ctx) {
   G.slotPow[i] = [infos[0].power, infos[1].power];
   const lines = [`<b>第 ${i + 1} 格</b>`, powerLine(P[0], infos[0]), powerLine(P[1], infos[1])];
   infos.forEach(inf => inf.notes.forEach(n => lines.push(`<div class="note">${n}</div>`)));
+  const T = key => TYPES[def(key).type].label;
 
   let why = '', res = '', badge = { text: '無事', cls: 'none' };
   ctx[0].prev = ctx[1].prev = 'none';
+  // 帶「勝利時」效果的防禦卡，沒有以防禦勝利 → 效果落空
+  const defWin = r.how === 'triangle' && def(infos[r.w].key).type === 'defense' ? r.w : -1;
+  infos.forEach((inf, pi) => { if (inf.key && pi !== defWin) { const d = def(inf.key); if (d.counterOnWin != null || d.onWinNextAttackBonus) eff(P[pi], inf.key, false); } });
 
-  if (r.w === null) {
-    const t = infos[0].key ? TYPES[def(infos[0].key).type].label : '';
+  if (r.how === 'mutual') {
+    why = `同為攻擊 → 互相傷害（威力 ${infos[0].power} 對 ${infos[1].power}）`;
+    bump(G.matchups, '攻擊對攻擊（互相傷害）');
+    const p0 = [`威力 ${infos[0].power}`], p1 = [`威力 ${infos[1].power}`];
+    const h0 = applyHit(P[0], P[1], infos[0].key, infos[0].power, ctx, p0);
+    const h1 = applyHit(P[1], P[0], infos[1].key, infos[1].power, ctx, p1);
+    res = `→ 雙方互相命中！${P[1].name}受到 ${h0.dmg}（${p0.join(' + ')}），HP ${h0.before} → ${P[1].hp}；` +
+          `${P[0].name}受到 ${h1.dmg}（${p1.join(' + ')}），HP ${h1.before} → ${P[0].hp}`;
+    badge = { text: `互相命中<br>你 −${h1.dmg}・敵 −${h0.dmg}`, cls: 'mutual' };
+  } else if (r.w === null) {
+    const t = infos[0].key ? T(infos[0].key) : '';
     why = {
       bothEmpty: '雙方皆為空格',
       emptyDef: '一方空格、另一方是防禦 → 無事',
       defdef: '防禦對防禦 → 一律無事',
       tie: `同為${t}，威力相同（${infos[0].power}）且速度相同（${P[0].ch.speed}）→ 雙方無事`,
+      diffTie: `同為攻擊，威力相同（${infos[0].power}）→ 高減低為 0，雙方無事`,
+      dodgeBoth: '雙方都閃避 → 無事',
+      dodgeIdle: '閃避對上防禦或空格 → 無事',
     }[r.how];
     res = '→ 雙方無事';
-    bump(G.matchups, { defdef: '防禦對防禦（無事）', tie: '同類平手（無事）' }[r.how] || '空格（無事）');
-    // 防禦卡沒有勝利 → 勝利效果落空
-    infos.forEach((inf, pi) => { if (inf.key) { const d = def(inf.key); if (d.counterOnWin != null || d.onWinNextAttackBonus) eff(P[pi], inf.key, false); } });
+    bump(G.matchups, { defdef: '防禦對防禦（無事）', tie: '同類平手（無事）', diffTie: '攻擊對攻擊（威力相同，無事）', dodgeBoth: '閃避（無事）', dodgeIdle: '閃避（無事）' }[r.how] || '空格（無事）');
   } else {
     const W = P[r.w], L = P[1 - r.w], wi = infos[r.w], li = infos[1 - r.w], wd = def(wi.key), x = ctx[r.w];
-    const ld = li.key ? def(li.key) : null;
-    if (ld && (ld.counterOnWin != null || ld.onWinNextAttackBonus)) eff(L, li.key, false);
-    const tw = TYPES[wd.type].label;
-    if (r.how === 'triangle') { why = `${tw} 勝 ${TYPES[ld.type].label}（相剋）`; bump(G.matchups, why); }
-    else if (r.how === 'power') { why = `同為${tw}，比威力：${wi.power} > ${li.power}`; bump(G.matchups, '同類比威力'); }
-    else if (r.how === 'speed') { why = `同為${tw}且威力相同（${wi.power}），比速度：${W.ch.speed} > ${L.ch.speed}`; bump(G.matchups, '同類比速度'); }
+    if (r.how === 'triangle') { why = `${T(wi.key)} 勝 ${T(li.key)}（相剋）`; bump(G.matchups, why); }
+    else if (r.how === 'power') { why = `同為${T(wi.key)}，比威力：${wi.power} > ${li.power}`; bump(G.matchups, '同類比威力'); }
+    else if (r.how === 'speed') { why = `同為${T(wi.key)}且威力相同（${wi.power}），比速度：${W.ch.speed} > ${L.ch.speed}`; bump(G.matchups, '同類比速度'); }
+    else if (r.how === 'diff') { why = `同為攻擊，高減低：${wi.power} − ${li.power} = ${wi.power - li.power}`; bump(G.matchups, '攻擊對攻擊（高減低）'); }
+    else if (r.how === 'dodge') { why = `${L.name}出${T(li.key)}，${W.name}閃避擲骰 🎲 ${r.roll}（≤ ${r.need} 成功）`; bump(G.matchups, '閃避成功'); }
+    else if (r.how === 'dodgeFail') { why = `${W.name}出${T(wi.key)}，${L.name}閃避擲骰 🎲 ${r.roll}（> ${r.need} 失敗）`; bump(G.matchups, '閃避失敗'); }
+    else if (r.how === 'vsDodge') { why = `技巧對閃避（此設定下閃避躲不了技巧）→ 命中`; bump(G.matchups, '技巧命中閃避'); }
     else { why = `${L.name} 空格，${W.name} 直接命中`; bump(G.matchups, '對空格命中'); }
 
-    let dmg, before = L.hp;
-    if (wd.type === 'defense') {
-      // 擋下：不受傷，反擊
+    if (r.how === 'dodge') {
+      x.prev = 'dodge'; W.stats.dodges++; eff(W, wi.key, true);
+      res = `→ ${W.name}閃避成功！完全不受傷`;
+      badge = { text: `${W.name}閃避成功<br>🎲 ${r.roll}`, cls: 'win' + r.w };
+    } else if (wd.type === 'defense') {
+      // 擋下：不受傷，反擊（反擊不算命中）
       const parts = [];
       const base = wd.counterOnWin != null ? wd.counterOnWin : CONFIG.baseCounter;
       parts.push(wd.counterOnWin != null ? `${wd.name} 反擊 ${base}` : `基本反擊 ${base}`);
-      dmg = base;
+      let dmg = base;
       if (wd.counterOnWin != null) eff(W, wi.key, true);
       if (W.ch.passive.counterBonus) { dmg += W.ch.passive.counterBonus; parts.push(`${W.ch.name}被動 +${W.ch.passive.counterBonus}`); W.stats.passive++; }
       if (wd.onWinNextAttackBonus) {
@@ -473,28 +551,27 @@ function resolveSlot(i, ctx) {
         parts.push(`<span class="ok">${wd.name}：下一格攻擊卡威力 +${wd.onWinNextAttackBonus}</span>`);
       }
       x.prev = 'block'; W.stats.blocks++;
-      res = `→ ${W.name}擋下！不受傷，反擊 ${dmg} 傷害（${parts.join('，')}）`;
+      const h = dealDamage(W, L, wi.key, dmg);
+      res = `→ ${W.name}擋下！不受傷，反擊 ${dmg} 傷害（${parts.join('，')}）。${L.name} HP ${h.before} → ${L.hp}`;
       badge = { text: `${W.name}擋下<br>反擊 ${dmg}`, cls: 'win' + r.w };
     } else {
       // 命中
-      const parts = [`威力 ${wi.power}`];
-      dmg = wi.power;
-      if (W.ch.passive.firstHitBonus && !x.hitThisTurn) { dmg += W.ch.passive.firstHitBonus; parts.push(`${W.ch.name}被動「本回合首次命中」+${W.ch.passive.firstHitBonus}`); W.stats.passive++; }
-      x.hitThisTurn = true; x.prev = 'hit'; W.stats.hits++;
-      res = `→ ${W.name}命中！${L.name}受到 ${dmg} 傷害（${parts.join(' + ')}）`;
-      badge = { text: `${W.name}命中<br>−${dmg}`, cls: 'win' + r.w };
+      if (r.how === 'dodgeFail') eff(L, li.key, false);
+      const base = r.how === 'diff' ? wi.power - li.power : wi.power;
+      const parts = [r.how === 'diff' ? `威力差 ${base}` : `威力 ${base}`];
+      const h = applyHit(W, L, wi.key, base, ctx, parts);
+      res = `→ ${W.name}命中！${L.name}受到 ${h.dmg} 傷害（${parts.join(' + ')}）`;
+      badge = { text: `${W.name}命中<br>−${h.dmg}${r.how === 'dodgeFail' ? '<br>閃避失敗' : ''}`, cls: 'win' + r.w };
       if (wd.type === 'skill' && r.how === 'triangle') {
         ctx[1 - r.w].breakPen += CONFIG.breakPenalty; W.stats.breaks++;
         res += `，並且<span class="ng">破防</span>：${L.name}下一格威力 −${CONFIG.breakPenalty}`;
         badge.text += '<br>破防';
       }
+      res += `。${L.name} HP ${h.before} → ${L.hp}`;
     }
-    L.hp = Math.max(0, L.hp - dmg);
-    bump(W.stats.dmg, wi.key, dmg); W.stats.dmgDealt += dmg;
-    res += `。${L.name} HP ${before} → ${L.hp}`;
-    G.flash = L.idx;
-    if (L.hp <= 0) { G.over = true; G.winner = W.idx; }
   }
+  const dead = P.filter(p => p.hp <= 0);
+  if (dead.length) { G.over = true; G.winner = dead.length === 2 ? -1 : 1 - dead[0].idx; }
   lines.push(`<div class="why">⚖ ${why}</div>`, `<div class="res">${res}</div>`);
   log(`<div class="le">${lines.join('')}</div>`);
   G.slotRes[i] = badge;
@@ -521,7 +598,7 @@ async function reveal() {
   G.active = -1;
   if (G.over) {
     G.phase = 'over';
-    log(`<div class="le turn">${who(G.players[G.winner])} 獲勝！（第 ${G.turn} 回合）</div>`);
+    log(`<div class="le turn">${resultText()}（第 ${G.turn} 回合）</div>`);
     render();
     await sleep(900);
     if (G === g) showStats();
@@ -536,14 +613,14 @@ async function reveal() {
 // =====================================================================
 function log(html) { const el = $('#log'); el.insertAdjacentHTML('beforeend', html); el.scrollTop = el.scrollHeight; }
 
-function pbarHTML(p, isMe) {
+function hpBoxHTML(p, cls) {
   const pct = Math.max(0, p.hp / p.maxHp * 100);
-  const energy = isMe ? (() => { const used = slotCost(p), left = CONFIG.energyPerTurn - used;
-    return `<div class="energy">能量 <b>${'●'.repeat(Math.max(0, left))}${'○'.repeat(Math.min(CONFIG.energyPerTurn, used))}</b> ${left}/${CONFIG.energyPerTurn}</div>`; })() : '';
-  return `<div class="pline"><span class="pname">${p.name}｜${p.ch.name}</span><span style="font-size:11px;color:var(--muted)">速度 ${p.ch.speed}</span>
-    <span class="pinfo">${isMe ? '' : `手牌 ${p.hand.length}・`}牌庫 ${p.deck.length}・棄牌 ${p.discard.length}</span></div>
-    <div style="font-size:11px;color:var(--muted)">被動：${passiveText(p.ch.passive)}</div>
-    <div class="hpwrap"><div class="hpfill ${pct <= 30 ? 'low' : ''}" style="width:${pct}%"></div><div class="hptext">HP ${p.hp} / ${p.maxHp}</div></div>${energy}`;
+  return `<div class="hpbox" style="grid-column:${cls === 'me' ? 2 : 3}">HP ${p.hp}/${p.maxHp}
+    <div class="hpwrap"><div class="hpfill ${pct <= 30 ? 'low' : ''}" style="width:${pct}%"></div></div></div>`;
+}
+function fighterHTML(p, cls) {
+  return `<div class="fighter ${cls} ${G.flash.includes(p.idx) ? 'flash' : ''} ${p.hp <= 0 ? 'dead' : ''}" onclick="showChar(${p.idx})">
+    <div class="glyph">${p.ch.name[0]}</div><div class="fn">${p.name === '你' ? '我方' : '敵方'}</div><div class="fn">${p.ch.name}</div><div class="fn">速 ${p.ch.speed}</div></div>`;
 }
 
 function render() {
@@ -551,29 +628,31 @@ function render() {
   const [me, op] = G.players;
   $('#turnLbl').textContent = `第 ${G.turn} 回合`;
   $('#speedBtn').textContent = G.fast ? '速度 快' : '速度 1x';
-  $('#oppBar').innerHTML = pbarHTML(op, false);
-  $('#meBar').innerHTML = pbarHTML(me, true);
-  ['#oppBar', '#meBar'].forEach((s, k) => { const el = $(s); el.classList.remove('flash'); if (G.flash === (k === 0 ? 1 : 0)) { void el.offsetWidth; el.classList.add('flash'); } });
-  G.flash = null;
 
   // 戰場
-  let b = '';
+  let b = `<div class="colhdr" style="grid-column:1;grid-row:1"><b>我方出牌</b><br>庫 ${me.deck.length}・棄 ${me.discard.length}</div>
+    ${hpBoxHTML(me, 'me')}${hpBoxHTML(op, 'op')}
+    <div class="colhdr" style="grid-column:4;grid-row:1"><b>敵方出牌</b><br>手 ${op.hand.length}・庫 ${op.deck.length}・棄 ${op.discard.length}</div>
+    ${fighterHTML(me, 'me')}${fighterHTML(op, 'op')}`;
   for (let i = 0; i < CONFIG.slots; i++) {
-    const oc = op.slots[i], mc = me.slots[i], rv = G.revealed[i], pw = G.slotPow[i];
-    let oHTML, mHTML;
+    const oc = op.slots[i], mc = me.slots[i], rv = G.revealed[i], pw = G.slotPow[i], row = i + 2, act = G.active === i ? 'active' : '';
+    let oHTML;
     if (G.phase === 'select') oHTML = `<div class="card back">?</div>`;
     else if (!rv) oHTML = oc ? `<div class="card back">?</div>` : `<div class="card empty">空</div>`;
     else oHTML = oc ? cardHTML(oc.key, G.anim === i ? 'flip' : '', pw ? `<span class="final">${pw[1]}</span>` : '') : `<div class="card empty">空</div>`;
-    mHTML = mc ? cardHTML(mc.key, '', pw ? `<span class="final">${pw[0]}</span>` : '') : `<div class="card empty">${G.phase === 'select' ? '點手牌放入' : '空'}</div>`;
+    const mHTML = mc ? cardHTML(mc.key, '', pw ? `<span class="final">${pw[0]}</span>` : '') : `<div class="card empty">${G.phase === 'select' ? `第 ${i + 1} 格` : '空'}</div>`;
+    b += `<div class="slot ${act}" data-slot="${i}" style="grid-column:1;grid-row:${row}">${mHTML}</div>
+      <div class="slot ${act}" style="grid-column:4;grid-row:${row}">${oHTML}</div>`;
     const res = G.slotRes[i];
-    const badge = res ? `<div class="badge ${res.cls}">${res.text}</div>` : `<div class="badge none">${rv ? '…' : 'VS'}</div>`;
-    b += `<div class="slotcol ${G.active === i ? 'active' : ''}"><div class="slotlbl">第 ${i + 1} 格</div>${oHTML}${badge}<div data-slot="${i}">${mHTML}</div></div>`;
+    if (res) b += `<div class="badge rowbadge ${res.cls}" style="grid-row:${row}">${res.text}</div>`;
   }
   $('#board').innerHTML = b;
-  G.anim = -1;
+  G.anim = -1; G.flash = [];
+
+  const used = slotCost(me), left = CONFIG.energyPerTurn - used;
+  $('#energy').innerHTML = `能量 <b>${'●'.repeat(Math.max(0, left))}${'○'.repeat(Math.min(CONFIG.energyPerTurn, used))}</b> ${left}/${CONFIG.energyPerTurn}`;
 
   // 手牌
-  const left = CONFIG.energyPerTurn - slotCost(me);
   $('#hand').innerHTML = me.hand.map(c => {
     const dim = G.phase !== 'select' || def(c.key).cost > left || !me.slots.includes(null);
     return `<div data-uid="${c.uid}">${cardHTML(c.key, dim ? 'dim' : '')}</div>`;
@@ -589,7 +668,7 @@ function render() {
   } else if (G.phase === 'end') {
     btn.disabled = false; btn.textContent = '下一回合 ▶'; hint.textContent = '可往下查看戰鬥紀錄';
   } else {
-    btn.disabled = false; btn.textContent = '查看對局統計'; hint.textContent = `${who(G.players[G.winner])} 獲勝`;
+    btn.disabled = false; btn.textContent = '查看對局統計'; hint.textContent = resultText();
   }
 }
 
@@ -633,42 +712,53 @@ function showPiles() {
     <div class="row"><button class="pri" onclick="closeModal()">關閉</button></div>`);
 }
 
+function showChar(pi) {
+  const p = G.players[pi], ch = p.ch;
+  openModal(`<h3>${p.name === '你' ? '我方' : '敵方'}：${ch.name}</h3>
+    <div>HP ${p.hp}/${p.maxHp}・速度 ${ch.speed}</div><div>被動：${passiveText(ch.passive)}</div>
+    <h4>專屬卡</h4><ul>${ch.cards.map(k => `<li>${cardLabel(k)} 費${def(k).cost}｜威力${def(k).power}${effText(def(k)) ? '｜' + effText(def(k)) : ''}</li>`).join('')}</ul>
+    <div class="row"><button class="pri" onclick="closeModal()">關閉</button></div>`);
+}
+
 function showRules() {
   const C = CONFIG;
   const cardRow = k => { const d = def(k); return `<li>${cardLabel(k)} 費${d.cost}｜威力${d.power}${effText(d) ? '｜' + effText(d) : ''}</li>`; };
   openModal(`<h3>規則</h3><div class="rules">
-    <ul><li>牌庫 ${C.commonCards.length + 2} 種 ×${C.copiesPerCard}，開局抽 ${C.handSize}，每回合補到 ${C.handSize}。牌庫空了洗棄牌堆。</li>
+    <ul><li>牌庫 ${deckKeys(Object.values(C.characters)[0]).length} 種 ×${C.copiesPerCard}，開局抽 ${C.handSize}，每回合補到 ${C.handSize}。牌庫空了洗棄牌堆。</li>
     <li>每回合 ${C.energyPerTurn} 能量，選 ${C.slots} 張排入 1～${C.slots} 格（總費用 ≤ ${C.energyPerTurn}），鎖定後依序逐格翻開對決。</li>
     <li><span class="tA">攻擊</span> 勝 <span class="tS">技巧</span>：命中，造成威力傷害。</li>
     <li><span class="tS">技巧</span> 勝 <span class="tD">防禦</span>：命中，造成威力傷害，且對手下一格威力 −${C.breakPenalty}（破防）。</li>
     <li><span class="tD">防禦</span> 勝 <span class="tA">攻擊</span>：不受傷，反擊 ${C.baseCounter}（擋下）。</li>
-    <li>同類型：威力高者命中；平手比速度；再平手無事。防禦對防禦一律無事。</li>
+    <li>攻擊對攻擊（目前：${CLASH[C.attackClash]}）：${{ higher: '威力高者命中，造成自己的威力傷害；平手比速度，再平手無事', mutual: '雙方都算命中，各自受到對方威力的傷害', diff: '威力高者命中，傷害為威力差；威力相同則無事' }[C.attackClash]}。</li>
+    <li>技巧對技巧：威力高者命中；平手比速度；再平手無事。防禦對防禦一律無事。</li>
+    ${C.useDodge ? `<li><span class="tG">閃避</span>不在相剋內：對手出攻擊${def('dodge').dodgeSkill ? '或技巧' : ''}時擲骰，成功完全不受傷，失敗則被命中；對上防禦、閃避或空格則無事。</li>` : ''}
     <li>組合條件看自己前一格：「前格命中」／「前格擋下」。第 1 格的組合永遠不成立。</li></ul>
-    <h4>通用卡</h4><ul>${C.commonCards.map(cardRow).join('')}</ul>
+    <h4>通用卡</h4><ul>${[...C.commonCards, ...(C.useDodge ? C.extraCards : [])].map(cardRow).join('')}</ul>
     ${Object.values(C.characters).map(ch => `<h4>${ch.name}：HP ${ch.hp}・速度 ${ch.speed}</h4><div>被動：${passiveText(ch.passive)}</div><ul>${ch.cards.map(cardRow).join('')}</ul>`).join('')}
     </div><div class="row"><button class="pri" onclick="closeModal()">關閉</button></div>`);
 }
 
 function showStats() {
   const P = G.players;
-  const keysOf = p => [...CONFIG.commonCards, ...p.ch.cards];
+  const keysOf = p => deckKeys(p.ch);
   const table = p => {
     const rows = keysOf(p).map(k => {
       const e = p.stats.eff[k];
-      const hasEff = def(k).combo || def(k).counterOnWin != null || def(k).onWinNextAttackBonus;
+      const hasEff = def(k).combo || def(k).counterOnWin != null || def(k).onWinNextAttackBonus || def(k).dodgeChance != null;
       return `<tr><td>${cardLabel(k)}</td><td>${p.stats.use[k] || 0}</td><td>${p.stats.dmg[k] || 0}</td>
         <td>${hasEff ? `<span class="ok">${e ? e.ok : 0}</span> / <span class="ng">${e ? e.miss : 0}</span>` : '—'}</td></tr>`;
     }).join('');
     const s = p.stats;
     return `<h4>${who(p)}　HP ${p.hp}/${p.maxHp}</h4>
-      <div style="font-size:12px;margin-bottom:6px">命中 ${s.hits}・擋下 ${s.blocks}・破防 ${s.breaks}・被動觸發 ${s.passive}・總傷害 ${s.dmgDealt}・洗牌 ${s.shuffles}</div>
+      <div style="font-size:12px;margin-bottom:6px">命中 ${s.hits}・擋下 ${s.blocks}・閃避 ${s.dodges}・破防 ${s.breaks}・被動觸發 ${s.passive}・總傷害 ${s.dmgDealt}・洗牌 ${s.shuffles}</div>
       <table><tr><th>卡牌</th><th>使用</th><th>傷害</th><th>組合/效果<br>觸發/落空</th></tr>${rows}</table>`;
   };
   const mu = Object.entries(G.matchups).map(([k, v]) => `<tr><td>${k}</td><td>${v}</td></tr>`).join('');
-  openModal(`<h3>${G.winner === 0 ? '🏆 你贏了' : '💀 你輸了'}（${G.turn} 回合）</h3>
+  openModal(`<h3>${G.winner === 0 ? '🏆 你贏了' : G.winner === 1 ? '💀 你輸了' : '🤝 平手'}（${G.turn} 回合）</h3>
+    <div style="font-size:12px;color:var(--muted)">規則：攻擊對攻擊＝${CLASH[CONFIG.attackClash]}・閃避卡${CONFIG.useDodge ? '加入' : '不加入'}</div>
     ${table(P[0])}${table(P[1])}
     <h4>各格結算類型</h4><table><tr><th>結果</th><th>次數</th></tr>${mu}</table>
-    <div class="note" style="font-size:11px;color:var(--muted);margin-top:8px">「觸發/落空」：組合卡看條件是否成立；招架看是否勝利；見切看勝利後下一格是否接到攻擊卡。傷害含反擊。</div>
+    <div class="note" style="font-size:11px;color:var(--muted);margin-top:8px">「觸發/落空」：組合卡看條件是否成立；招架看是否勝利；見切看勝利後下一格是否接到攻擊卡；閃避看擲骰成敗。傷害含反擊。</div>
     <div class="row"><button onclick="copyLog()">複製紀錄</button><button onclick="closeModal();toSelect()">重選角色</button>
     <button class="pri" onclick="closeModal();startGame(...G.lastPick)">再來一局</button></div>`);
 }
@@ -676,7 +766,7 @@ function showStats() {
 function copyLog() {
   let text = $('#log').innerText;
   if (G && G.over) {
-    text += '\n\n=== 統計 ===\n' + G.players.map(p => `${who(p)} HP ${p.hp}：` + [...CONFIG.commonCards, ...p.ch.cards].map(k => {
+    text += '\n\n=== 統計 ===\n' + G.players.map(p => `${who(p)} HP ${p.hp}：` + deckKeys(p.ch).map(k => {
       const e = p.stats.eff[k]; return `${def(k).name} 用${p.stats.use[k] || 0} 傷${p.stats.dmg[k] || 0}${e ? ` 觸${e.ok}/落${e.miss}` : ''}`; }).join('，')).join('\n');
   }
   const done = () => toast('已複製到剪貼簿');
@@ -703,11 +793,20 @@ function charOptHTML(key, sel, group) {
 }
 function renderSelect() {
   const keys = Object.keys(CONFIG.characters);
+  $('#pickRules').innerHTML =
+    `<div class="optrow"><div class="lbl">攻擊對攻擊</div>${Object.entries(CLASH).map(([k, v]) => `<button class="${CONFIG.attackClash === k ? 'sel' : ''}" data-clash="${k}">${v}</button>`).join('')}</div>
+     <div class="optrow"><div class="lbl">閃避卡（${effText(def('dodge'))}）</div>
+       <button class="${CONFIG.useDodge ? 'sel' : ''}" data-dodge="1">加入牌庫</button><button class="${CONFIG.useDodge ? '' : 'sel'}" data-dodge="0">不加入</button></div>`;
   $('#pickMe').innerHTML = keys.map(k => charOptHTML(k, pick.me === k, 'me')).join('');
   $('#pickOpp').innerHTML = keys.map(k => charOptHTML(k, pick.opp === k, 'opp')).join('') +
     `<button class="charopt ${pick.opp === 'random' ? 'sel' : ''}" data-g="opp" data-k="random"><div class="cn">隨機</div></button>`;
 }
 $('#selectScreen').addEventListener('click', e => {
+  const o = e.target.closest('[data-clash],[data-dodge]');
+  if (o) {
+    if (o.dataset.clash) CONFIG.attackClash = o.dataset.clash; else CONFIG.useDodge = o.dataset.dodge === '1';
+    return renderSelect();
+  }
   const el = e.target.closest('[data-g]'); if (!el) return;
   pick[el.dataset.g] = el.dataset.k; renderSelect();
 });
