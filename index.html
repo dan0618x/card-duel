@@ -196,15 +196,16 @@ const CONFIG = {
     crystalHp: 30,      // 水晶 HP
     siegeDmg: 1,        // 每隻排隊中的敵人，每回合對水晶造成的傷害
     waveHealPct: 0.4,   // 每波結束：主角回復比例
-    killHealPct: 0.1,   // 波次中每打倒一隻：主角回復比例
+    killHealPct: 0.15,  // 波次中每打倒一隻：主角回復比例
+    startEquip: 1,      // 開始前先選幾件裝備（每次三選一）
     waveRepair: 4,      // 每波結束：水晶自動修復
     repairChoice: 10,   // 獎勵選「修復水晶」修多少
     recruitAfter: [3, 6],   // 打完第幾波招募夥伴
     // tier：用哪個區域的怪；count：幾隻普通怪；boss：最後再加上該區域的王
     waves: [
-      { tier: 0, count: 2 }, { tier: 0, count: 3 }, { tier: 0, count: 2, boss: true },
-      { tier: 1, count: 2 }, { tier: 1, count: 3 }, { tier: 1, count: 2, boss: true },
-      { tier: 2, count: 2 }, { tier: 2, count: 3 }, { tier: 2, count: 2, boss: true },
+      { tier: 0, count: 2 }, { tier: 0, count: 3 }, { tier: 0, count: 0, boss: true },
+      { tier: 1, count: 2 }, { tier: 1, count: 3 }, { tier: 1, count: 1, boss: true },
+      { tier: 2, count: 2 }, { tier: 2, count: 3 }, { tier: 2, count: 1, boss: true },
     ],
   },
 
@@ -875,7 +876,8 @@ MODES.guard = {
       if (w.boss) q.push(monsterSpec(mp.boss, w.tier, 0, false));
       return q;
     });
-    showHub();
+    const n = CONFIG.guard.startEquip, run = i => i < n ? equipChoices(`準備 ${i + 1}/${n}`, '', () => run(i + 1)) : showHub();
+    run(0);
   },
   resume() { showHub(); },
   hub() {
