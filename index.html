@@ -195,7 +195,8 @@ const CONFIG = {
   guard: {
     crystalHp: 30,      // 水晶 HP
     siegeDmg: 1,        // 每隻排隊中的敵人，每回合對水晶造成的傷害
-    waveHealPct: 0.4,   // 每波結束：主角回復比例
+    waveHealPct: 0.5,   // 每波結束：主角回復比例
+    bossHpMul: 0.8,     // 守護模式的王 HP 倍率（成長機會比冒險少）
     killHealPct: 0.15,  // 波次中每打倒一隻：主角回復比例
     startEquip: 1,      // 開始前先選幾件裝備（每次三選一）
     waveRepair: 4,      // 每波結束：水晶自動修復
@@ -873,7 +874,7 @@ MODES.guard = {
     RUN.waves = CONFIG.guard.waves.map((w, i) => {
       const step = (i % 3) * 3, mp = CONFIG.maps[w.tier];
       const q = Array.from({ length: w.count }, () => monsterSpec(rand(mp.monsters), w.tier, step, false));
-      if (w.boss) q.push(monsterSpec(mp.boss, w.tier, 0, false));
+      if (w.boss) { const b = monsterSpec(mp.boss, w.tier, 0, false); b.hp = Math.round(b.hp * CONFIG.guard.bossHpMul); q.push(b); }
       return q;
     });
     const n = CONFIG.guard.startEquip, run = i => i < n ? equipChoices(`準備 ${i + 1}/${n}`, '', () => run(i + 1)) : showHub();
