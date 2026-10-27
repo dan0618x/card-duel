@@ -17,7 +17,7 @@ const CONFIG = {
   baseCounter: 1,       // 防禦勝利的基本反擊傷害
   breakPenalty: 1,      // 破防：對手下一格威力減少多少
 
-  // 攻擊對攻擊的結算方式（開始畫面也可以切換）
+  // 攻擊對攻擊的結算方式（預設值；主頁「遊戲設定」可以切換）
   //   'higher' 威力高者命中，造成自己的威力傷害
   //   'mutual' 互相傷害：雙方都命中，各自受到對方威力的傷害
   //   'diff'   高減低：威力高者命中，傷害 = 威力差
@@ -113,7 +113,7 @@ const CONFIG = {
 
   // ---------- 角色池（9 位） ----------
   // 角色只有 HP、速度的差別；cards＝2 張專屬戰鬥卡，support＝2 張專屬輔助卡
-  // （冒險要連打很多場，HP 是之前 1 對 1 版本的兩倍）
+  // （要連打很多場，HP 是最早 1 對 1 版本的兩倍）
   characters: {
     swordsman: { name: '劍士',   hp: 40, speed: 3, cards: ['slash', 'mikiri'],    support: ['sw_aura', 'sw_eye'],
                  defaultDeck: { stab: 2, heavy: 2, chase: 2, block: 2, parry: 2, grab: 2, slash: 2, mikiri: 2 } },
@@ -139,8 +139,8 @@ const CONFIG = {
 
   // ---------- 怪物（12 種 + 3 王） ----------
   // traits：armor 受到傷害−N / regen 每回合結束回復 N / thorns 被命中時反彈 N / enrage 每回合威力+N（累加）
+  // 每種怪物的牌組偏向某個類型：看牌組（點怪物）和棄牌堆就能猜它會出什麼
   monsters: {
-    // 每種怪物的牌組偏向某個類型：看牌組（點怪物）和棄牌堆就能猜它會出什麼
     slime:    { name: '史萊姆',   icon: '🟢', hp: 8,  speed: 1, deck: { shell: 5, block: 2, slam: 2, grab: 1 }, traits: { regen: 1 } },
     wolf:     { name: '野狼',     icon: '🐺', hp: 8,  speed: 4, deck: { bite: 3, stab: 3, claw: 3, block: 1 } },
     goblin:   { name: '哥布林',   icon: '👺', hp: 9,  speed: 3, deck: { stab: 2, heavy: 1, block: 2, grab: 2, chase: 2, parry: 1 } },
@@ -157,34 +157,65 @@ const CONFIG = {
     dgolem:   { name: '魔像',     icon: '🪨', hp: 18, speed: 1, deck: { guard: 4, shell: 3, smash: 2, hellfire: 1 }, traits: { armor: 1 } },
     demonlord:{ name: '魔王',     icon: '👿', hp: 40, speed: 3, deck: { hellfire: 2, smash: 2, claw: 2, guard: 2, curse: 2, wing: 2 }, traits: { enrage: 1, regen: 1 } },
   },
-
-
-  // ---------- 地圖 ----------
-  // powBonus：這張地圖所有怪物威力加成（跨地圖的明顯變強）
+  // 三個區域（冒險的 3 張地圖、守護的波次、王者連戰都用這個分級）
+  // powBonus：這個區域所有怪物威力加成（跨區域的明顯變強）
   maps: [
     { name: '幽暗森林', monsters: ['slime', 'wolf', 'goblin', 'shroom'],          boss: 'treant',    powBonus: 0 },
     { name: '亡者洞窟', monsters: ['skeleton', 'bat', 'golem', 'shaman'],         boss: 'bonelord',  powBonus: 1 },
     { name: '魔王城',   monsters: ['dknight', 'succubus', 'hellhound', 'dgolem'], boss: 'demonlord', powBonus: 2 },
   ],
   scaling: {
-    hpPerStep: 0.05,    // 同地圖每往後一步，怪物 HP +5%
-    powEverySteps: 5,   // 同地圖每往後幾步，怪物威力 +1（王不吃步數加成）
+    hpPerStep: 0.05,    // 同區域每往後一步，怪物 HP +5%
+    powEverySteps: 5,   // 同區域每往後幾步，怪物威力 +1（王不吃步數加成）
     eliteHp: 1.4,       // 精英：HP 倍率
     elitePow: 1,        // 精英：威力加成
   },
+
+  // ---------- 冒險模式：地圖生成 ----------
+  // 像殺戮尖塔：隨機幾條路徑往下走，每步可以往左、直走、往右（不交叉），路徑的聯集就是地圖
   mapGen: {
-    lanes: 3,           // 路線數
+    columns: 4,         // 地圖有幾欄
+    pathsMin: 3,        // 隨機路徑數（最少）
+    pathsMax: 5,        // 隨機路徑數（最多）
     steps: 10,          // 每張地圖幾步（最後一步是王）
-    crossChance: 0.4,   // 相鄰路線之間有連線的機率（每一步、每一對路線）
-    // 第 1 步全是怪；王前一步固定是休息點；中間各種點的數量（剩下的都是怪）
-    nodes: { heal: 2, buff: 2, swap: 1, treasure: 2, event: 2, elite: 2 },
+    // 中間各步的點種類權重；第 1 步全是怪
+    typeWeights: { monster: 44, event: 14, elite: 10, heal: 10, buff: 8, treasure: 8, swap: 6 },
+    maxPerMap: { elite: 3, heal: 3, buff: 3, treasure: 2, swap: 2, event: 4 },   // 每張地圖上限
     eliteFromStep: 4,   // 精英最早出現在第幾步
-    beforeBoss: ['heal', 'buff', 'heal'],
+    healFromStep: 3,    // 回血點最早出現在第幾步
+    beforeBoss: { heal: 3, buff: 1, treasure: 1 },   // 王前一步的權重
   },
   winHealPct: 0.2,      // 每場戰鬥勝利後，主角回復最大 HP 的比例
   healPct: 0.3,         // 回血點：全隊回復最大 HP 的比例
   mapClearHeal: 0.3,    // 打完王：全隊回復比例
   buffBattles: 3,       // 祝福持續幾場戰鬥
+
+  // ---------- 守護模式 ----------
+  // 每一波是連續的一場戰鬥：敵人一隻倒下、下一隻馬上上場；還在排隊的敵人每回合攻擊水晶
+  guard: {
+    crystalHp: 30,      // 水晶 HP
+    siegeDmg: 1,        // 每隻排隊中的敵人，每回合對水晶造成的傷害
+    waveHealPct: 0.5,   // 每波結束：主角回復比例
+    bossHpMul: 0.8,     // 守護模式的王 HP 倍率（成長機會比冒險少）
+    killHealPct: 0.15,  // 波次中每打倒一隻：主角回復比例
+    startEquip: 1,      // 開始前先選幾件裝備（每次三選一）
+    waveRepair: 4,      // 每波結束：水晶自動修復
+    repairChoice: 10,   // 獎勵選「修復水晶」修多少
+    recruitAfter: [3, 6],   // 打完第幾波招募夥伴
+    // tier：用哪個區域的怪；count：幾隻普通怪；boss：最後再加上該區域的王
+    waves: [
+      { tier: 0, count: 2 }, { tier: 0, count: 3 }, { tier: 0, count: 0, boss: true },
+      { tier: 1, count: 2 }, { tier: 1, count: 3 }, { tier: 1, count: 1, boss: true },
+      { tier: 2, count: 2 }, { tier: 2, count: 3 }, { tier: 2, count: 1, boss: true },
+    ],
+  },
+
+  // ---------- 王者連戰 ----------
+  bossRush: {
+    healBetween: 0.5,   // 每打完一隻王：全隊回復比例
+    startEquip: 2,      // 開始前先選幾件裝備（每次三選一）
+    startUpgrades: 2,   // 開始前主角先選幾個提升（每次三選一）
+  },
 
   // ---------- 成長：裝備（全隊共用）、角色提升、祝福 ----------
   // 效果欄位：powAll/powAtk/powSkl/powDef/slot1/counter/dodge 同上，另外：
@@ -243,24 +274,36 @@ const CONFIG = {
     { title: '流浪祭司', text: '祭司願意為你們祈福。', options: [
       { label: '接受祈福：獲得 1 個隨機祝福', effects: { buff: 1 } },
       { label: '請他治療：全隊回復 20% HP', effects: { healPct: 0.2 } } ] },
+    { title: '鐵匠', text: '路邊的鐵匠正在打鐵：「幫你磨一磨？」', options: [
+      { label: '請他幫忙：失去 4 HP，主角獲得 1 個隨機提升', effects: { loseHp: 4, upgrade: 1 } },
+      { label: '道謝離開：全隊回復 10% HP', effects: { healPct: 0.1 } } ] },
   ],
 
+  // ---------- 敵人 AI ----------
   ai: {
-    comboWeight: 2,     // 怪物排序權重 = 1 + comboWeight × 組合銜接數；0 = 完全隨機
+    level: 'smart',     // 預設難度（主頁「遊戲設定」可以切換）：'easy' 隨機 / 'normal' 偏好組合 / 'smart' 會讀牌
+    comboWeight: 2,     // normal：排序權重 = 1 + comboWeight × 組合銜接數
+    smart: {
+      // 聰明：用你「還沒出現過的牌」（牌庫＋手牌＋已排的牌，它不知道哪張在哪）估計你出各類型的機率，出剋制的
+      comboValue: 0.5,  // 組合銜接的加分
+      finishHp: 8,      // 你的 HP 低於這個值時，偏好進攻
+      lowHp: 0.35,      // 牠自己的 HP 低於這個比例時，偏好防禦、閃避
+      temperature: 0.3, // 越小越死板（總是選最佳），越大越隨機
+    },
   },
   ui: {
     flipDelay: 650,     // 翻牌後到結算的停頓（毫秒）
     slotDelay: 1000,    // 每格結算後到下一格的停頓（毫秒）
     supportDelay: 700,  // 每張輔助卡掀開的停頓（毫秒）
     fastFactor: 0.25,   // 「快速」模式的時間倍率
-    bigHit: 5,          // 傷害達到多少會震動畫面
+    bigHit: 5,          // 傷害達到多少會震動畫面（手機會震動）
   },
 };
 </script>
 <style>
   :root {
     --bg: #14161c; --panel: #1f232c; --panel2: #2a2f3a; --text: #e8e8ec; --muted: #9aa0ac;
-    --atk: #e0564f; --def: #4b8fe0; --skl: #3fb67a; --dge: #b07ce8; --sup: #36c3c3; --gold: #f0c04a; --hp: #4fc36b;
+    --atk: #e0564f; --def: #4b8fe0; --skl: #3fb67a; --dge: #b07ce8; --sup: #36c3c3; --gold: #f0c04a; --hp: #4fc36b; --crystal: #7fd8ff;
   }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body { margin: 0; background: var(--bg); color: var(--text);
@@ -269,31 +312,53 @@ const CONFIG = {
   #app { max-width: 480px; margin: 0 auto; padding: 8px 10px 40px; }
   #app { padding-left: max(10px, env(safe-area-inset-left)); padding-right: max(10px, env(safe-area-inset-right)); padding-bottom: max(40px, env(safe-area-inset-bottom)); }
   .hidden { display: none !important; }
-  h1 { font-size: 20px; margin: 8px 0 4px; }
+  h1 { font-size: 22px; margin: 10px 0 2px; }
   h2 { font-size: 15px; margin: 16px 0 8px; color: var(--muted); font-weight: 600; }
   .muted { color: var(--muted); }
   .bigbtn { width: 100%; padding: 14px; border-radius: 10px; background: var(--gold); color: #222; font-weight: 700; font-size: 16px; margin-top: 16px; }
+  .bigbtn:disabled { background: #3a3d45; color: #888; }
   .sbtn { background: var(--panel2); padding: 6px 9px; border-radius: 7px; font-size: 12px; }
   .topbar { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
   .topbar .turn { font-weight: 700; flex: 1; font-size: 13px; }
 
-  /* ---------- 標題畫面 ---------- */
+  /* ---------- 主頁 ---------- */
+  .hero { text-align: center; padding: 14px 0 6px; }
+  .hero .logo { font-size: 42px; }
+  .hero .sub { color: var(--muted); font-size: 12px; margin-top: 4px; }
+  .modes { display: grid; gap: 8px; margin-top: 10px; }
+  .modecard { display: flex; align-items: center; gap: 12px; background: var(--panel); border-radius: 12px; padding: 12px; text-align: left; width: 100%; border: 2px solid transparent; }
+  .modecard:active { border-color: var(--gold); }
+  .modecard .mi { font-size: 32px; width: 42px; text-align: center; }
+  .modecard .mt { flex: 1; }
+  .modecard .mt b { font-size: 16px; }
+  .modecard .mt div { font-size: 12px; color: #cfd3da; margin-top: 2px; line-height: 1.45; }
+  .modecard .mt .rec { color: var(--gold); font-size: 11px; }
+  .modecard.cont { border-color: var(--gold); background: #2b2614; }
+  .homebtns { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 12px; }
+  .homebtns button { background: var(--panel2); border-radius: 10px; padding: 12px 4px; font-size: 13px; }
+
+  /* ---------- 設定畫面 ---------- */
   .charlist { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
-  .charopt { background: var(--panel); border: 2px solid transparent; border-radius: 10px; padding: 8px 4px; text-align: center; width: 100%; }
+  .charopt { background: var(--panel); border: 2px solid transparent; border-radius: 10px; padding: 8px 4px; text-align: center; width: 100%; position: relative; }
   .charopt.sel { border-color: var(--gold); }
+  .charopt.sel2 { border-color: var(--sup); }
+  .charopt:disabled { opacity: .35; }
   .charopt .cn { font-size: 15px; font-weight: 700; }
   .charopt .cs { color: var(--muted); font-size: 11px; margin-top: 2px; }
+  .charopt .badge2 { position: absolute; top: -6px; right: -4px; font-size: 10px; background: var(--sup); color: #111; border-radius: 6px; padding: 0 4px; font-weight: 700; }
   .chardetail { background: var(--panel); border-radius: 10px; padding: 8px 10px; margin-top: 8px; font-size: 12px; line-height: 1.6; }
-  .optrow { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+  .optrow { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
   .optrow .lbl { width: 100%; font-size: 12px; color: var(--muted); }
-  .optrow button { flex: 1; background: var(--panel); border: 2px solid transparent; border-radius: 8px; padding: 8px 4px; font-size: 13px; }
+  .optrow button { flex: 1; background: var(--panel2); border: 2px solid transparent; border-radius: 8px; padding: 8px 4px; font-size: 13px; }
   .optrow button.sel { border-color: var(--gold); }
   .decklist { display: grid; gap: 4px; }
-  .deckline { display: flex; align-items: center; gap: 6px; background: var(--panel); border-radius: 8px; padding: 6px 8px; font-size: 12px; }
+  .deckline { display: flex; align-items: center; gap: 6px; background: var(--panel); border-radius: 8px; padding: 8px; font-size: 12px; }
   .deckline b { width: 52px; }
   .deckline .tag { flex: 1; color: var(--muted); }
+  .monlist { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; }
+  .monlist .charopt .cn { font-size: 13px; }
 
-  /* ---------- 地圖 ---------- */
+  /* ---------- 地圖、據點 ---------- */
   .party { display: grid; gap: 4px; margin: 6px 0; }
   .pm { display: flex; align-items: center; gap: 8px; background: var(--panel); border-radius: 8px; padding: 6px 8px; font-size: 12px; }
   .pm .role { font-size: 10px; padding: 1px 5px; border-radius: 4px; background: var(--panel2); }
@@ -308,15 +373,28 @@ const CONFIG = {
   #mapSvg .node.avail circle { stroke: var(--gold); stroke-width: 3; animation: pulse 1.2s infinite; }
   @keyframes pulse { 50% { stroke-opacity: .3; } }
   .legend { font-size: 11px; color: var(--muted); margin-top: 6px; line-height: 1.7; }
+  .crystalbar { background: var(--panel); border-radius: 10px; padding: 8px 10px; margin: 6px 0; font-size: 13px; }
+  .crystalbar .hpwrap { height: 12px; }
+  .crystalbar .hpfill { background: var(--crystal); }
+  .crystalbar .hpfill.low { background: var(--atk); }
+  .waves { display: grid; gap: 4px; }
+  .wave { display: flex; align-items: center; gap: 8px; background: var(--panel); border-radius: 8px; padding: 7px 9px; font-size: 12.5px; }
+  .wave.done { opacity: .45; }
+  .wave.cur { border: 2px solid var(--gold); }
+  .wave .wn { font-weight: 700; width: 50px; }
+  .wave .wm { flex: 1; font-size: 16px; letter-spacing: 1px; }
 
   /* ---------- 戰場 ---------- */
+  #guardBar { display: flex; align-items: center; gap: 8px; background: var(--panel); border-radius: 8px; padding: 5px 8px; font-size: 12px; margin-bottom: 4px; }
+  #guardBar .gq { flex: 1; text-align: right; font-size: 15px; }
+  #crystalIcon { font-size: 18px; }
   #arenaWrap { position: relative; }
   #arenaWrap.shake1 { animation: shake1 .35s; } #arenaWrap.shake2 { animation: shake2 .5s; }
   @keyframes shake1 { 20% { transform: translate(-4px, 2px); } 40% { transform: translate(4px, -2px); } 60% { transform: translate(-3px, 1px); } 80% { transform: translate(2px, -1px); } }
   @keyframes shake2 { 15% { transform: translate(-9px, 4px) rotate(-1deg); } 30% { transform: translate(8px, -4px) rotate(1deg); } 45% { transform: translate(-7px, 3px); } 60% { transform: translate(6px, -2px); } 80% { transform: translate(-3px, 1px); } }
   #fx { position: absolute; inset: 0; pointer-events: none; z-index: 5; }
-  .float { position: absolute; transform: translate(-50%, -50%); font-weight: 900; white-space: nowrap; text-shadow: 0 2px 0 #000, 0 0 8px #000; animation: floatUp 1.1s ease-out forwards; }
-  .float.dmg { color: #ff6b5e; } .float.heal { color: #6bff8a; } .float.info { color: var(--gold); } .float.shield { color: #8fd3ff; }
+  .float { position: absolute; transform: translate(-50%, -50%); font-weight: 900; white-space: nowrap; text-shadow: 0 2px 0 #000, 0 0 8px #000; animation: floatUp 1.1s ease-out forwards; pointer-events: none; z-index: 30; }
+  .float.dmg { color: #ff6b5e; } .float.heal { color: #6bff8a; } .float.info { color: var(--gold); } .float.shield { color: #8fd3ff; } .float.crystal { color: var(--crystal); }
   @keyframes floatUp { 0% { opacity: 0; transform: translate(-50%, -20%) scale(.5); } 15% { opacity: 1; transform: translate(-50%, -60%) scale(1.25); } 30% { transform: translate(-50%, -70%) scale(1); } 100% { opacity: 0; transform: translate(-50%, -170%) scale(1); } }
   .arena { display: grid; grid-template-columns: minmax(0,1fr) 62px 62px minmax(0,1fr); grid-template-rows: auto repeat(3, minmax(80px, auto)); gap: 6px; margin: 8px 0 4px; }
   .colhdr { font-size: 11px; color: var(--muted); align-self: end; text-align: center; line-height: 1.3; }
@@ -327,6 +405,8 @@ const CONFIG = {
   .hpfill.low { background: var(--atk); }
   .fighter { position: relative; grid-row: 2 / span 3; border-radius: 12px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; color: #222; font-weight: 800; cursor: pointer; text-align: center; padding: 2px; }
   .fighter.me { grid-column: 2; background: #f5c242; } .fighter.op { grid-column: 3; background: #f0457f; }
+  .fighter.enter { animation: enter .5s ease-out; }
+  @keyframes enter { from { transform: translateX(40px); opacity: 0; } to { transform: none; opacity: 1; } }
   .fighter .glyph { font-size: 30px; line-height: 1; } .fighter .fn { font-size: 11px; } .fighter .tr { font-size: 9.5px; font-weight: 600; }
   .fighter.dead { filter: grayscale(1) brightness(.6); }
   .fighter.flash { animation: hurt .5s; }
@@ -353,6 +433,7 @@ const CONFIG = {
   .card .pw b { color: var(--text); font-size: 14px; }
   .card .ef { font-size: 9.5px; color: #cfd3da; margin-top: auto; line-height: 1.25; }
   .card.back { background: repeating-linear-gradient(45deg, #2b3040, #2b3040 6px, #323850 6px, #323850 12px); border-top-color: #444; align-items: center; justify-content: center; color: var(--muted); font-size: 20px; }
+  .card.back .intent { font-size: 13px; font-weight: 800; background: #111c; border-radius: 6px; padding: 2px 6px; }
   .card.empty { background: transparent; border: 1px dashed #444; align-items: center; justify-content: center; color: #666; font-size: 11px; }
   .card.flip { animation: flip .45s ease-out; }
   @keyframes flip { from { transform: rotateY(90deg); } to { transform: rotateY(0); } }
@@ -382,6 +463,7 @@ const CONFIG = {
   .le.battle { color: #fff; background: #2a2f3a; border-radius: 6px; padding: 6px; margin-top: 8px; font-weight: 700; }
   .le.sys { color: var(--muted); font-size: 12px; }
   .le.sup { color: #9fe6e6; }
+  .le.siege { color: var(--crystal); }
   .le .why { color: #d7c27a; }
   .le .res { font-weight: 700; }
   .le .note { color: var(--muted); font-size: 11.5px; }
@@ -435,7 +517,7 @@ const CONFIG = {
   }
   @media (min-width: 900px) {
     #app { max-width: 1040px; }
-    #titleScreen, #mapScreen { max-width: 480px; margin: 0 auto; }
+    #homeScreen, #setupScreen, #deckScreen, #mapScreen, #hubScreen { max-width: 480px; margin: 0 auto; }
     .gamecols { display: grid; grid-template-columns: 480px 1fr; gap: 16px; align-items: start; }
     .gside { position: sticky; top: 8px; }
     .gside .loghead { margin-top: 0; }
@@ -447,33 +529,57 @@ const CONFIG = {
 </head>
 <body>
 <div id="app">
-  <!-- 標題：選起始角色、設定牌組 -->
-  <div id="titleScreen">
-    <h1>卡牌對決 · 冒險原型</h1>
-    <div class="muted" style="font-size:12px">攻擊 &gt; 技巧 &gt; 防禦 &gt; 攻擊・3 張地圖，每張 10 步，最後打王</div>
-    <h2>選擇起始角色</h2>
-    <div class="charlist" id="pickStart"></div>
-    <div id="startDetail"></div>
-    <h2>牌組設定（每個角色：戰鬥牌組＋輔助牌組，沒設定就用預設）</h2>
-    <div class="decklist" id="deckList"></div>
-    <h2>規則實驗</h2>
-    <div id="pickRules"></div>
-    <button class="bigbtn" id="startBtn">開始冒險</button>
-    <button class="sbtn" style="margin-top:12px" onclick="showRules()">規則說明</button>
+  <!-- 主頁 -->
+  <div id="homeScreen">
+    <div class="hero"><div class="logo">⚔️🃏</div><h1>卡牌對決</h1><div class="sub">攻擊 &gt; 技巧 &gt; 防禦 &gt; 攻擊・三格同時翻牌</div></div>
+    <div class="modes" id="modeList"></div>
+    <div class="homebtns">
+      <button onclick="showDecks()">🃏 牌組設定</button>
+      <button onclick="showSettings()">⚙️ 遊戲設定</button>
+      <button onclick="showRules()">📖 規則說明</button>
+    </div>
   </div>
 
-  <!-- 地圖 -->
+  <!-- 模式設定：選角色等 -->
+  <div id="setupScreen" class="hidden">
+    <div class="topbar"><button class="sbtn" onclick="goHome()">← 主頁</button><span class="turn" id="setupTitle"></span></div>
+    <div id="setupBody"></div>
+    <button class="bigbtn" id="setupStart"></button>
+  </div>
+
+  <!-- 牌組設定 -->
+  <div id="deckScreen" class="hidden">
+    <div class="topbar"><button class="sbtn" onclick="goHome()">← 主頁</button><span class="turn">牌組設定</span></div>
+    <div class="muted" style="font-size:12px;margin-bottom:8px">每個角色都有戰鬥牌組（當主角時用）和輔助牌組（當輔助時用），沒設定就用預設。</div>
+    <div class="decklist" id="deckList"></div>
+  </div>
+
+  <!-- 冒險地圖 -->
   <div id="mapScreen" class="hidden">
     <div class="topbar">
       <span class="turn" id="mapTitle"></span>
       <button class="sbtn" onclick="showRunDecks()">牌組</button>
-      <button class="sbtn" onclick="showRules()">規則</button>
+      <button class="sbtn" onclick="goHome()">主頁</button>
       <button class="sbtn" onclick="confirmQuit()">放棄</button>
     </div>
-    <div class="party" id="partyBox"></div>
-    <div class="gear" id="gearBox"></div>
+    <div class="party" id="mapParty"></div>
+    <div class="gear" id="mapGear"></div>
     <svg id="mapSvg"></svg>
-    <div class="legend">⚔️ 怪物　💀 精英　❤️ 回血　✨ 祝福　🔄 換卡　🎁 寶箱　❓ 事件　👑 王<br>點發光的點前進。打普通怪可以提升主角，精英、寶箱、王可以拿裝備。</div>
+    <div class="legend">⚔️ 怪物　💀 精英　❤️ 回血　✨ 祝福　🔄 換卡　🎁 寶箱　❓ 事件　👑 王<br>點發光的點前進。打普通怪可以提升主角，精英、寶箱、王可以拿裝備。進度會自動保存。</div>
+  </div>
+
+  <!-- 守護、王者連戰的據點 -->
+  <div id="hubScreen" class="hidden">
+    <div class="topbar">
+      <span class="turn" id="hubTitle"></span>
+      <button class="sbtn" onclick="showRunDecks()">牌組</button>
+      <button class="sbtn" onclick="goHome()">主頁</button>
+      <button class="sbtn" onclick="confirmQuit()">放棄</button>
+    </div>
+    <div class="party" id="hubParty"></div>
+    <div class="gear" id="hubGear"></div>
+    <div id="hubBody"></div>
+    <button class="bigbtn" id="hubGo"></button>
   </div>
 
   <!-- 戰鬥 -->
@@ -485,6 +591,7 @@ const CONFIG = {
       <button class="sbtn" id="speedBtn" onclick="toggleSpeed()">速度 1x</button>
     </div>
     <div class="gamecols"><div class="gmain">
+    <div id="guardBar" class="hidden"></div>
     <div id="arenaWrap"><div class="arena" id="board"></div><div id="fx"></div></div>
     <div class="supports" id="supports"></div>
     <div class="energy" id="energy"></div>
@@ -511,6 +618,7 @@ const TYPES = {
   dodge:   { label: '閃避', beats: null,      cls: 'tG' },
 };
 const CLASH = { higher: '比威力', mutual: '互相傷害', diff: '高減低' };
+const AI_LEVEL = { easy: '簡單（隨機）', normal: '普通（偏好組合）', smart: '聰明（會讀牌）' };
 const COND = { prevHit: '前格命中', prevBlock: '前格擋下', prevDodge: '前格閃避成功' };
 const NODE_ICON = { monster: '⚔️', elite: '💀', heal: '❤️', buff: '✨', swap: '🔄', treasure: '🎁', event: '❓', boss: '👑' };
 const NODE_NAME = { monster: '怪物', elite: '精英', heal: '回血', buff: '祝福', swap: '換卡', treasure: '寶箱', event: '事件', boss: '王' };
@@ -531,10 +639,18 @@ const def = key => CONFIG.cards[key];
 const sdef = key => CONFIG.supportCards[key];
 const bump = (o, k, n = 1) => { o[k] = (o[k] || 0) + n; };
 const pickN = (arr, n) => shuffle(arr.slice()).slice(0, n);
+const rand = a => a[Math.floor(Math.random() * a.length)];
 function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
-let fast = false;
-function sleep(ms) { return new Promise(r => setTimeout(r, ms * (fast ? CONFIG.ui.fastFactor : 1))); }
+function weighted(w) { const e = Object.entries(w).filter(([, v]) => v > 0); let r = Math.random() * e.reduce((a, [, v]) => a + v, 0); for (const [k, v] of e) { r -= v; if (r <= 0) return k; } return e[e.length - 1][0]; }
+function sleep(ms) { return new Promise(r => setTimeout(r, ms * (SET.fast ? CONFIG.ui.fastFactor : 1))); }
 function condMet(cond, prev) { return { prevHit: 'hit', prevBlock: 'block', prevDodge: 'dodge' }[cond] === prev; }
+function store(key, val) { try { if (val === undefined) localStorage.removeItem(key); else localStorage.setItem(key, JSON.stringify(val)); } catch (e) {} }
+function load(key, fallback) { try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; } catch (e) { return fallback; } }
+
+// 設定（記在瀏覽器）
+const SET = Object.assign({ attackClash: CONFIG.attackClash, aiLevel: CONFIG.ai.level, intent: false, fast: false, vibrate: true }, load('cardDuel.settings', {}));
+CONFIG.attackClash = SET.attackClash;
+function saveSettings() { CONFIG.attackClash = SET.attackClash; store('cardDuel.settings', SET); }
 
 function effText(d, short) {
   const t = [];
@@ -561,7 +677,8 @@ function supCardHTML(key, extra = '') {
   return `<div class="card support ${extra}"><div class="ctop"><span class="ty">輔助</span></div><div class="nm">${sdef(key).name}</div><div class="ef">${modText(sdef(key).mods)}</div></div>`;
 }
 function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), 1800); }
-function showScreen(id) { ['#titleScreen', '#mapScreen', '#gameScreen'].forEach(s => $(s).classList.toggle('hidden', s !== id)); window.scrollTo(0, 0); }
+const SCREENS = ['#homeScreen', '#setupScreen', '#deckScreen', '#mapScreen', '#hubScreen', '#gameScreen'];
+function showScreen(id) { SCREENS.forEach(s => $(s).classList.toggle('hidden', s !== id)); window.scrollTo(0, 0); }
 
 // =====================================================================
 //  牌組（戰鬥＋輔助），自訂的存在瀏覽器
@@ -578,9 +695,7 @@ function deckValid(kind, charKey, d) {
   const K = DECK_KIND[kind], pool = K.pool(charKey), n = deckCount(d);
   return n >= K.min() && n <= K.max() && Object.entries(d).every(([k, c]) => pool.includes(k) && c >= 0 && c <= CONFIG.maxCopies);
 }
-let savedDecks = { battle: {}, support: {} };
-try { savedDecks = Object.assign(savedDecks, JSON.parse(localStorage.getItem('cardDuel.decks2') || '{}')); } catch (e) {}
-function saveDecks() { try { localStorage.setItem('cardDuel.decks2', JSON.stringify(savedDecks)); } catch (e) {} }
+const savedDecks = Object.assign({ battle: {}, support: {} }, load('cardDuel.decks2', {}));
 function deckFor(kind, charKey) {
   const d = savedDecks[kind][charKey];
   return d && deckValid(kind, charKey, d) ? { ...d } : DECK_KIND[kind].def(charKey);
@@ -588,7 +703,7 @@ function deckFor(kind, charKey) {
 const deckSummary = (kind, d) => Object.entries(d).filter(([, n]) => n > 0).map(([k, n]) => `${DECK_KIND[kind].name(k)}×${n}`).join('、');
 
 // =====================================================================
-//  冒險（RUN）狀態
+//  一趟遊戲（RUN）：隊伍、裝備、祝福、統計；各模式共用
 // =====================================================================
 let RUN = null;
 const equipSum = k => RUN ? RUN.equipment.reduce((s, e) => s + (CONFIG.equipment[e].mods[k] || 0), 0) : 0;
@@ -606,112 +721,39 @@ function mergeStats(into, s) {
   Object.entries(s.eff).forEach(([c, e]) => { const t = into.eff[c] || (into.eff[c] = { ok: 0, miss: 0 }); t.ok += e.ok; t.miss += e.miss; });
   ['supDmg', 'hits', 'blocks', 'breaks', 'dodges', 'dmgDealt', 'dmgTaken', 'shuffles'].forEach(k => into[k] += s[k]);
 }
-
-function startRun(startKey) {
+function newRun(mode, partyKeys) {
   G = null;
-  RUN = { map: 0, party: [], main: 0, equipment: [], buffs: [], mapState: null, over: false, won: false,
-          stats: newStats(), battles: 0, maxCombo: 0, history: [] };
-  RUN.party.push(newCharState(startKey));
+  RUN = { mode, party: [], main: 0, equipment: [], buffs: [], over: false, won: false, stats: newStats(), battles: 0, kills: 0, maxCombo: 0, history: [], start: partyKeys.slice() };
+  partyKeys.forEach(k => RUN.party.push(newCharState(k)));
   $('#log').innerHTML = '';
-  log(`<div class="le battle">冒險開始：${CONFIG.characters[startKey].name}｜規則：攻擊對攻擊＝${CLASH[CONFIG.attackClash]}</div>`);
-  RUN.mapState = genMap(0);
-  showMap();
+  log(`<div class="le battle">${MODES[mode].icon} ${MODES[mode].name}開始：${RUN.party.map(c => c.ch.name).join('、')}｜攻擊對攻擊＝${CLASH[CONFIG.attackClash]}・敵人 AI＝${AI_LEVEL[SET.aiLevel]}</div>`);
+}
+// 存檔：只在地圖、據點畫面存（戰鬥中重新整理會回到戰鬥前）
+function saveRun() { if (RUN && !RUN.over && MODES[RUN.mode].save) store('cardDuel.save', { v: 1, run: JSON.parse(JSON.stringify(RUN, (k, v) => k === 'ch' ? undefined : v)) }); }
+function clearSave() { store('cardDuel.save', undefined); }
+function loadSave() {
+  const s = load('cardDuel.save', null);
+  if (!s || s.v !== 1 || !MODES[s.run.mode] || s.run.party.some(c => !CONFIG.characters[c.key])) return null;
+  s.run.party.forEach(c => c.ch = CONFIG.characters[c.key]);
+  return s.run;
+}
+function resumeRun() {
+  const r = loadSave(); if (!r) return goHome();
+  G = null; RUN = r;
+  $('#log').innerHTML = '';
+  log(`<div class="le battle">繼續${MODES[RUN.mode].name}：${RUN.party.map(c => c.ch.name).join('、')}</div>`);
+  MODES[RUN.mode].resume();
+}
+// 紀錄
+const records = load('cardDuel.records', {});
+function recordRun(score, text) {
+  const r = records[RUN.mode] || (records[RUN.mode] = { plays: 0, wins: 0, best: -1, bestText: '' });
+  r.plays++; if (RUN.won) r.wins++;
+  if (score > r.best) { r.best = score; r.bestText = text; }
+  store('cardDuel.records', records);
 }
 
-// =====================================================================
-//  地圖：3 條路線、每張 10 步（最後一步是王）
-// =====================================================================
-function genMap(mi) {
-  const M = CONFIG.mapGen, L = M.lanes, S = M.steps - 1;   // S＝一般步數（不含王）
-  const bag = [];
-  Object.entries(M.nodes).forEach(([t, n]) => { for (let i = 0; i < n; i++) bag.push(t); });
-  while (bag.length < (S - 2) * L) bag.push('monster');
-  shuffle(bag);
-  const before = shuffle(M.beforeBoss.slice());
-  const nodes = [], edges = [];
-  for (let s = 0; s < S; s++) {
-    nodes.push([]);
-    for (let l = 0; l < L; l++) nodes[s].push(s === 0 ? 'monster' : s === S - 1 ? before[l % before.length] : bag.pop() || 'monster');
-  }
-  // 精英太早出現的話，跟後面的普通怪物交換位置
-  for (let s = 1; s < M.eliteFromStep - 1; s++) for (let l = 0; l < L; l++) if (nodes[s][l] === 'elite') {
-    const spots = []; for (let t = M.eliteFromStep - 1; t < S - 1; t++) for (let k = 0; k < L; k++) if (nodes[t][k] === 'monster') spots.push([t, k]);
-    if (spots.length) { const [t, k] = spots[Math.floor(Math.random() * spots.length)]; nodes[t][k] = 'elite'; nodes[s][l] = 'monster'; }
-  }
-  for (let s = 0; s < S - 1; s++) {
-    edges.push([]);
-    for (let l = 0; l < L; l++) edges[s].push([l]);
-    for (let l = 0; l < L - 1; l++) {          // 相鄰路線之間最多一條斜線，避免交叉
-      const r = Math.random();
-      if (r < M.crossChance / 2) edges[s][l].push(l + 1);
-      else if (r < M.crossChance) edges[s][l + 1].push(l);
-    }
-  }
-  return { mi, S, L, nodes, edges, pos: null, visited: [] };
-}
-function availNodes() {
-  const m = RUN.mapState;
-  if (!m.pos) return m.nodes[0].map((_, l) => ({ s: 0, l }));
-  if (m.pos.s === m.S - 1) return [{ s: m.S, l: 1 }];        // 王
-  if (m.pos.s >= m.S) return [];
-  return m.edges[m.pos.s][m.pos.l].map(l => ({ s: m.pos.s + 1, l }));
-}
-const nodeType = (s, l) => s >= RUN.mapState.S ? 'boss' : RUN.mapState.nodes[s][l];
-
-function showMap() {
-  showScreen('#mapScreen');
-  const m = RUN.mapState, mp = CONFIG.maps[m.mi];
-  $('#mapTitle').textContent = `地圖 ${m.mi + 1}/${CONFIG.maps.length}：${mp.name}・第 ${m.pos ? m.pos.s + 1 : 0}/${m.S + 1} 步`;
-  $('#partyBox').innerHTML = RUN.party.map((c, i) => {
-    const mx = charMaxHp(c), pct = c.hp / mx * 100;
-    return `<div class="pm"><span class="role ${i === RUN.main ? 'main' : ''}">${i === RUN.main ? '主角' : '輔助'}</span><span class="nm">${c.ch.name}</span>
-      <div class="bar"><div class="hpwrap" style="height:10px"><div class="hpfill ${pct <= 30 ? 'low' : ''}" style="width:${pct}%"></div></div></div>
-      <span>${c.hp}/${mx}</span><button class="sbtn" onclick="showCharInfo(${i})">詳情</button></div>`;
-  }).join('');
-  $('#gearBox').innerHTML = (RUN.equipment.length || RUN.buffs.length ? '' : '<span class="muted">還沒有裝備</span>') +
-    RUN.equipment.map(e => `<button class="chip" onclick="toast('${CONFIG.equipment[e].name}：${modText(CONFIG.equipment[e].mods)}')">${CONFIG.equipment[e].icon} ${CONFIG.equipment[e].name}</button>`).join('') +
-    RUN.buffs.map(b => `<button class="chip buff" onclick="toast('${CONFIG.buffs[b.key].name}：${modText(CONFIG.buffs[b.key].mods)}（剩 ${b.left} 場）')">✨ ${CONFIG.buffs[b.key].name} ×${b.left}</button>`).join('');
-
-  // SVG：上面是第 1 步，往下走，最下面是王
-  const W = 300, RH = 56, top = 28, X = l => 50 + l * 100, Y = s => top + s * RH;
-  const H = Y(m.S) + 34;
-  const av = availNodes(), isAv = (s, l) => av.some(a => a.s === s && a.l === l);
-  const visited = (s, l) => m.visited.some(v => v.s === s && v.l === l);
-  let svg = '';
-  const edge = (l1, s1, l2, s2) => { const used = visited(s1, l1) && visited(s2, l2);
-    return `<line x1="${X(l1)}" y1="${Y(s1)}" x2="${X(l2)}" y2="${Y(s2)}" stroke="${used ? '#f0c04a' : '#454b58'}" stroke-width="${used ? 4 : 2.5}"/>`; };
-  for (let s = 0; s < m.S - 1; s++) for (let l = 0; l < m.L; l++) m.edges[s][l].forEach(l2 => { svg += edge(l, s, l2, s + 1); });
-  for (let l = 0; l < m.L; l++) svg += edge(l, m.S - 1, 1, m.S);
-  const nodeSvg = (s, l, t) => {
-    const cur = m.pos && m.pos.s === s && m.pos.l === l, av1 = isAv(s, l), vis = visited(s, l);
-    const r = t === 'boss' ? 26 : 19;
-    return `<g class="node ${av1 ? 'avail' : ''}" ${av1 ? `data-node="${s},${l}"` : ''} opacity="${av1 || vis ? 1 : .5}">
-      <circle cx="${X(l)}" cy="${Y(s)}" r="${r}" fill="${cur ? '#5a4a1a' : vis ? '#2d3a2f' : '#262a33'}" stroke="${cur ? '#f0c04a' : '#555'}" stroke-width="${cur ? 3 : 1.5}"/>
-      <text x="${X(l)}" y="${Y(s) + 1}" text-anchor="middle" dominant-baseline="middle" font-size="${t === 'boss' ? 24 : 17}">${NODE_ICON[t]}</text></g>`;
-  };
-  for (let s = 0; s < m.S; s++) {
-    svg += `<text x="8" y="${Y(s) + 4}" fill="#666" font-size="11">${s + 1}</text>`;
-    for (let l = 0; l < m.L; l++) svg += nodeSvg(s, l, m.nodes[s][l]);
-  }
-  svg += `<text x="8" y="${Y(m.S) + 4}" fill="#666" font-size="11">${m.S + 1}</text>` + nodeSvg(m.S, 1, 'boss');
-  const el = $('#mapSvg'); el.setAttribute('viewBox', `0 0 ${W} ${H}`); el.innerHTML = svg;
-  if (m.pos) setTimeout(() => window.scrollTo(0, Math.max(0, el.getBoundingClientRect().top + window.scrollY + Y(m.pos.s) * el.clientWidth / W - 160)), 30);
-}
-$('#mapSvg').addEventListener('click', e => {
-  const g = e.target.closest('[data-node]'); if (!g) return;
-  const [s, l] = g.dataset.node.split(',').map(Number);
-  enterNode(s, l);
-});
-function enterNode(s, l) {
-  const m = RUN.mapState;
-  m.pos = { s, l }; m.visited.push({ s, l });
-  const t = nodeType(s, l);
-  RUN.history.push(`${m.mi + 1}-${s + 1}${NODE_NAME[t]}`);
-  if (t === 'monster' || t === 'elite' || t === 'boss') return startBattle(t);
-  ({ heal: nodeHeal, buff: nodeBuff, swap: nodeSwap, treasure: nodeTreasure, event: nodeEvent })[t]();
-}
-
-// ---------- 彈窗、三選一 ----------
+// ---------- 共用的成長、選項彈窗 ----------
 function openModal(html) { $('#mbox').innerHTML = html; $('#modal').classList.remove('hidden'); $('#modal').scrollTop = 0; }
 function closeModal() { $('#modal').classList.add('hidden'); edit = null; }
 let CHOICES = [];   // [{ title, desc, fn }]：點了就關掉彈窗並執行 fn
@@ -724,14 +766,7 @@ $('#mbox').addEventListener('click', e => {
   const b = e.target.closest('[data-choice]');
   if (b) { const o = CHOICES[+b.dataset.choice]; CHOICES = []; closeModal(); o.fn(); }
 });
-
-// ---------- 非戰鬥的點 ----------
 function healAll(pct) { return RUN.party.map(c => `${c.ch.name} +${healChar(c, Math.round(charMaxHp(c) * pct))}`).join('、'); }
-function nodeHeal() {
-  const txt = healAll(CONFIG.healPct);
-  log(`<div class="le sys">❤️ 營火：${txt}</div>`);
-  choiceModal('❤️ 營火', `全隊回復 ${Math.round(CONFIG.healPct * 100)}% HP：${txt}`, [{ title: '繼續前進', fn: showMap }]);
-}
 function gainEquip(k) {
   RUN.equipment.push(k);
   const mh = CONFIG.equipment[k].mods.maxHp; if (mh) RUN.party.forEach(c => c.hp += mh);
@@ -746,15 +781,324 @@ function gainUpgrade(c, k) {
 }
 function gainBuff(k) { RUN.buffs.push({ key: k, left: CONFIG.buffBattles }); log(`<div class="le sys">祝福：${CONFIG.buffs[k].name}（${modText(CONFIG.buffs[k].mods)}，${CONFIG.buffBattles} 場）</div>`); }
 const freeEquip = () => Object.keys(CONFIG.equipment).filter(k => !RUN.equipment.includes(k));
+const equipOpt = (k, then) => ({ title: `${CONFIG.equipment[k].icon} ${CONFIG.equipment[k].name}`, desc: modText(CONFIG.equipment[k].mods), fn: () => { gainEquip(k); then(); } });
+const upgradeOpt = (k, then) => ({ title: `⬆️ ${CONFIG.upgrades[k].name}`, desc: `主角 ${mainChar().ch.name}：${modText(CONFIG.upgrades[k].mods)}（永久）`, fn: () => { gainUpgrade(mainChar(), k); then(); } });
 function equipChoices(title, text, then, extra = '') {
-  const opts = pickN(freeEquip(), 3).map(k => ({ title: `${CONFIG.equipment[k].icon} ${CONFIG.equipment[k].name}`, desc: modText(CONFIG.equipment[k].mods), fn: () => { gainEquip(k); then(); } }));
+  const opts = pickN(freeEquip(), 3).map(k => equipOpt(k, then));
   if (!opts.length) return choiceModal(title, text + '裝備已經拿光了。', [{ title: '繼續', fn: then }], extra);
   choiceModal(title, text + '選一件裝備（全隊共用）。', opts, extra);
 }
 function upgradeChoices(title, text, then, extra = '') {
-  const c = mainChar();
-  choiceModal(title, `${text}選一個提升給主角 ${c.ch.name}（永久）。`,
-    pickN(Object.keys(CONFIG.upgrades), 3).map(k => ({ title: CONFIG.upgrades[k].name, desc: modText(CONFIG.upgrades[k].mods), fn: () => { gainUpgrade(c, k); then(); } })), extra);
+  choiceModal(title, `${text}選一個提升給主角 ${mainChar().ch.name}（永久）。`, pickN(Object.keys(CONFIG.upgrades), 3).map(k => upgradeOpt(k, then)), extra);
+}
+function recruit(text, then) {
+  const pool = Object.keys(CONFIG.characters).filter(k => !RUN.party.some(c => c.key === k));
+  choiceModal('🤝 招募夥伴', `${text}角色池 ${pool.length} 位中隨機抽 3 位，選 1 位加入隊伍。`,
+    pickN(pool, 3).map(k => { const ch = CONFIG.characters[k]; return { title: `${ch.name}（HP ${ch.hp}・速度 ${ch.speed}）`,
+      desc: `${ch.cards.map(cardLine).join('<br>')}<br>${ch.support.map(supLine).join('<br>')}`,
+      fn: () => { RUN.party.push(newCharState(k)); log(`<div class="le sys">${ch.name} 加入隊伍</div>`); chooseMain(then); } }; }));
+}
+function chooseMain(then) {
+  choiceModal('選擇主角', '主角出 3 張戰鬥卡、承受傷害；其他人當輔助，每回合各出 1 張輔助卡。',
+    RUN.party.map((c, i) => ({ title: `${c.ch.name}${i === RUN.main ? '（目前主角）' : ''}`, desc: `HP ${c.hp}/${charMaxHp(c)}・速度 ${charSpeed(c)}${c.upNames.length ? '・提升：' + c.upNames.join('、') : ''}`,
+      fn: () => { RUN.main = i; log(`<div class="le sys">主角：${c.ch.name}</div>`); then(); } })));
+}
+function partyHTML() {
+  return RUN.party.map((c, i) => {
+    const mx = charMaxHp(c), pct = c.hp / mx * 100;
+    return `<div class="pm"><span class="role ${i === RUN.main ? 'main' : ''}">${i === RUN.main ? '主角' : '輔助'}</span><span class="nm">${c.ch.name}</span>
+      <div class="bar"><div class="hpwrap" style="height:10px"><div class="hpfill ${pct <= 30 ? 'low' : ''}" style="width:${pct}%"></div></div></div>
+      <span>${c.hp}/${mx}</span><button class="sbtn" onclick="showCharInfo(${i})">詳情</button></div>`;
+  }).join('');
+}
+function gearHTML() {
+  return (RUN.equipment.length || RUN.buffs.length ? '' : '<span class="muted">還沒有裝備</span>') +
+    RUN.equipment.map(e => `<button class="chip" onclick="toast('${CONFIG.equipment[e].name}：${modText(CONFIG.equipment[e].mods)}')">${CONFIG.equipment[e].icon} ${CONFIG.equipment[e].name}</button>`).join('') +
+    RUN.buffs.map(b => `<button class="chip buff" onclick="toast('${CONFIG.buffs[b.key].name}：${modText(CONFIG.buffs[b.key].mods)}（剩 ${b.left} 場）')">✨ ${CONFIG.buffs[b.key].name} ×${b.left}</button>`).join('');
+}
+
+// 怪物規格：key、HP、威力加成（實際生成在 makeMonster）
+function monsterSpec(key, tier, step, elite) {
+  const md = CONFIG.monsters[key], S = CONFIG.scaling;
+  const boss = CONFIG.maps.some(m => m.boss === key);
+  if (boss) step = 0;
+  return { key, tier, elite: !!elite, boss,
+    hp: Math.round(md.hp * (1 + S.hpPerStep * step) * (elite ? S.eliteHp : 1)),
+    pow: CONFIG.maps[tier].powBonus + Math.floor(step / S.powEverySteps) + (elite ? S.elitePow : 0) };
+}
+
+// =====================================================================
+//  模式
+// =====================================================================
+const MODES = {};
+
+// ---------- 冒險 ----------
+MODES.adventure = {
+  name: '冒險', icon: '🗺️', save: true,
+  desc: `${CONFIG.maps.length} 張隨機地圖，每張 ${CONFIG.mapGen.steps} 步，選路線、打怪、拿裝備，最後打王。每過一張地圖招募一位夥伴。`,
+  record: r => r.bestText ? `最佳：${r.bestText}` : '',
+  setup() { setupPickOne('選擇起始角色', () => this.start([setupState.main])); },
+  start(keys) { newRun('adventure', keys); RUN.mapState = genMap(0); showMap(); },
+  resume() { showMap(); },
+  battleEnd(won) {
+    if (!won) return endRun(false);
+    const kind = G.kind, back = () => kind === 'boss' ? this.mapCleared() : showMap();
+    const msg = afterWinHeal();
+    if (kind === 'monster') upgradeChoices('勝利！', msg, back, statsBtn());
+    else equipChoices(kind === 'boss' ? '👑 擊敗王！' : '💀 擊敗精英！', msg, back, statsBtn());
+  },
+  mapCleared() {
+    const mi = RUN.mapState.mi;
+    if (mi >= CONFIG.maps.length - 1) return endRun(true);
+    const txt = healAll(CONFIG.mapClearHeal);
+    recruit(`🏁 地圖完成！全隊回復 ${Math.round(CONFIG.mapClearHeal * 100)}%：${txt}<br>`, () => {
+      RUN.mapState = genMap(mi + 1);
+      log(`<div class="le battle">進入地圖 ${mi + 2}：${CONFIG.maps[mi + 1].name}｜主角 ${mainChar().ch.name}</div>`);
+      showMap();
+    });
+  },
+  summary() { const m = RUN.mapState; return { text: `到達地圖 ${m.mi + 1}・第 ${m.pos ? m.pos.s + 1 : 0} 步`, score: RUN.won ? 999 : m.mi * 100 + (m.pos ? m.pos.s + 1 : 0) }; },
+  label() { return `地圖${RUN.mapState.mi + 1}・第${RUN.mapState.pos.s + 1}步`; },
+};
+
+// ---------- 守護 ----------
+MODES.guard = {
+  name: '守護', icon: '🔮', save: true,
+  desc: `守住水晶撐過 ${CONFIG.guard.waves.length} 波敵人。每波敵人一隻接一隻上場，排隊中的敵人每回合攻擊水晶，要打得快。`,
+  record: r => r.bestText ? `最佳：${r.bestText}` : '',
+  setup() { setupPickOne('選擇起始角色', () => this.start([setupState.main])); },
+  start(keys) {
+    newRun('guard', keys);
+    RUN.wave = 0; RUN.crystalMax = CONFIG.guard.crystalHp; RUN.crystal = RUN.crystalMax;
+    // 先排好每一波的怪物，可以在據點預覽
+    RUN.waves = CONFIG.guard.waves.map((w, i) => {
+      const step = (i % 3) * 3, mp = CONFIG.maps[w.tier];
+      const q = Array.from({ length: w.count }, () => monsterSpec(rand(mp.monsters), w.tier, step, false));
+      if (w.boss) { const b = monsterSpec(mp.boss, w.tier, 0, false); b.hp = Math.round(b.hp * CONFIG.guard.bossHpMul); q.push(b); }
+      return q;
+    });
+    const n = CONFIG.guard.startEquip, run = i => i < n ? equipChoices(`準備 ${i + 1}/${n}`, '', () => run(i + 1)) : showHub();
+    run(0);
+  },
+  resume() { showHub(); },
+  hub() {
+    const gd = CONFIG.guard, pct = RUN.crystal / RUN.crystalMax * 100;
+    $('#hubTitle').textContent = `🔮 守護・第 ${RUN.wave + 1}/${RUN.waves.length} 波`;
+    $('#hubBody').innerHTML = `<div class="crystalbar">🔮 水晶 <b>${RUN.crystal}/${RUN.crystalMax}</b>
+        <div class="hpwrap"><div class="hpfill ${pct <= 30 ? 'low' : ''}" style="width:${pct}%"></div></div>
+        <div class="muted" style="font-size:11px;margin-top:4px">排隊中的敵人每隻每回合 −${gd.siegeDmg}・每波結束自動修復 ${gd.waveRepair}</div></div>
+      <div class="waves">${RUN.waves.map((q, i) => `<div class="wave ${i < RUN.wave ? 'done' : i === RUN.wave ? 'cur' : ''}">
+        <span class="wn">第 ${i + 1} 波</span><span class="wm">${q.map(s => CONFIG.monsters[s.key].icon).join('')}</span>
+        <span class="muted">${i < RUN.wave ? '✔' : CONFIG.maps[CONFIG.guard.waves[i].tier].name}</span></div>`).join('')}</div>
+      <div class="muted" style="font-size:12px;margin-top:8px">本波：${RUN.waves[RUN.wave].map(s => `${CONFIG.monsters[s.key].icon}${CONFIG.monsters[s.key].name} HP${s.hp}`).join(' → ')}</div>`;
+    $('#hubGo').textContent = `開始第 ${RUN.wave + 1} 波 ▶`;
+    $('#hubGo').onclick = () => {
+      RUN.history.push(`第${RUN.wave + 1}波`);
+      startBattle({ kind: RUN.waves[RUN.wave].some(s => s.boss) ? 'boss' : 'monster', queue: RUN.waves[RUN.wave], label: `守護・第${RUN.wave + 1}波`, guard: true });
+    };
+  },
+  battleEnd(won) {
+    if (!won) return endRun(false);
+    const gd = CONFIG.guard, wasBoss = RUN.waves[RUN.wave].some(s => s.boss);
+    RUN.wave++;
+    const c = mainChar(), h = healChar(c, Math.round(charMaxHp(c) * gd.waveHealPct));
+    const rep = Math.min(gd.waveRepair, RUN.crystalMax - RUN.crystal); RUN.crystal += rep;
+    const kh = modOf(G.players[0], 'killHeal'), kg = kh.n ? healChar(c, kh.n) : 0;
+    const msg = `第 ${RUN.wave} 波守住了！主角回復 ${h + kg}，水晶修復 ${rep}（${RUN.crystal}/${RUN.crystalMax}）。<br>`;
+    log(`<div class="le sys">${msg.replace('<br>', '')}</div>`);
+    if (RUN.wave >= RUN.waves.length) return endRun(true);
+    const next = () => gd.recruitAfter.includes(RUN.wave) ? recruit('', showHub) : showHub();
+    if (wasBoss) return equipChoices('👑 擊敗王！', msg, next, statsBtn());
+    const repairOpt = { title: `🔮 修復水晶 +${gd.repairChoice}`, desc: `水晶 ${RUN.crystal} → ${Math.min(RUN.crystalMax, RUN.crystal + gd.repairChoice)}`,
+      fn: () => { RUN.crystal = Math.min(RUN.crystalMax, RUN.crystal + gd.repairChoice); next(); } };
+    choiceModal('守住了！', msg + '選一個獎勵。', [...pickN(Object.keys(CONFIG.upgrades), 2).map(k => upgradeOpt(k, next)), repairOpt], statsBtn());
+  },
+  summary() { return { text: RUN.won ? `守住全部 ${RUN.waves.length} 波` : `撐到第 ${RUN.wave + 1} 波`, score: RUN.won ? 999 : RUN.wave }; },
+  label() { return `守護・第${RUN.wave + 1}波`; },
+};
+
+// ---------- 王者連戰 ----------
+MODES.bossrush = {
+  name: '王者連戰', icon: '👑', save: true,
+  desc: '一開始就組好 3 人隊伍，連續挑戰三隻王。適合測試主角＋輔助的搭配。',
+  record: r => r.bestText ? `最佳：${r.bestText}` : '',
+  setup() { setupPickTeam(() => this.start([setupState.main, ...setupState.sups])); },
+  start(keys) {
+    newRun('bossrush', keys); RUN.bossIdx = 0;
+    // 沒有前面的戰鬥可以成長，開始前先拿幾件裝備、幾個提升
+    const B = CONFIG.bossRush, steps = [];
+    for (let i = 0; i < B.startEquip; i++) steps.push(equipChoices);
+    for (let i = 0; i < B.startUpgrades; i++) steps.push(upgradeChoices);
+    const run = i => i < steps.length ? steps[i](`準備 ${i + 1}/${steps.length}`, '', () => run(i + 1)) : showHub();
+    run(0);
+  },
+  resume() { showHub(); },
+  hub() {
+    $('#hubTitle').textContent = `👑 王者連戰・${RUN.bossIdx + 1}/${CONFIG.maps.length}`;
+    $('#hubBody').innerHTML = `<div class="waves">${CONFIG.maps.map((mp, i) => { const m = CONFIG.monsters[mp.boss];
+      return `<div class="wave ${i < RUN.bossIdx ? 'done' : i === RUN.bossIdx ? 'cur' : ''}"><span class="wn">第 ${i + 1} 戰</span>
+        <span class="wm">${m.icon}</span><span>${m.name}・HP ${m.hp}${mp.powBonus ? `・威力 +${mp.powBonus}` : ''}<br><span class="muted" style="font-size:11px">${modText(m.traits)}</span></span></div>`; }).join('')}</div>`;
+    $('#hubGo').textContent = `挑戰 ${CONFIG.monsters[CONFIG.maps[RUN.bossIdx].boss].name} ▶`;
+    $('#hubGo').onclick = () => {
+      RUN.history.push(CONFIG.monsters[CONFIG.maps[RUN.bossIdx].boss].name);
+      startBattle({ kind: 'boss', queue: [monsterSpec(CONFIG.maps[RUN.bossIdx].boss, RUN.bossIdx, 0, false)], label: `王者連戰・${RUN.bossIdx + 1}` });
+    };
+  },
+  battleEnd(won) {
+    if (!won) return endRun(false);
+    RUN.bossIdx++;
+    if (RUN.bossIdx >= CONFIG.maps.length) return endRun(true);
+    const txt = healAll(CONFIG.bossRush.healBetween);
+    equipChoices('👑 擊敗王！', `全隊回復 ${Math.round(CONFIG.bossRush.healBetween * 100)}%：${txt}<br>`, showHub, statsBtn());
+  },
+  summary() { return { text: RUN.won ? '三王全破' : `擊敗 ${RUN.bossIdx} 隻王`, score: RUN.won ? 999 : RUN.bossIdx }; },
+  label() { return `王者連戰・${RUN.bossIdx + 1}`; },
+};
+
+// ---------- 練習 ----------
+MODES.practice = {
+  name: '練習', icon: '🎯', save: false,
+  desc: '自選主角、輔助和任一隻怪物，打一場。用來驗證數值、試牌組。',
+  record: r => r.plays ? `練習 ${r.plays} 場・勝 ${r.wins}` : '',
+  setup() { setupPickTeam(() => this.start([setupState.main, ...setupState.sups]), true); },
+  start(keys) {
+    newRun('practice', keys);
+    const tier = CONFIG.maps.findIndex(m => m.boss === setupState.mon || m.monsters.includes(setupState.mon));
+    const spec = monsterSpec(setupState.mon, tier, 0, setupState.elite);
+    RUN.spec = spec;
+    startBattle({ kind: spec.boss ? 'boss' : spec.elite ? 'elite' : 'monster', queue: [spec], label: '練習' });
+  },
+  battleEnd(won) { RUN.won = won; endRun(won); },
+  summary() { return { text: '', score: 0 }; },
+  label() { return '練習'; },
+};
+function statsBtn() { return `<div class="row"><button onclick="showBattleStats()">查看本場統計</button></div>`; }
+function afterWinHeal() {
+  const c = mainChar(), P = G.players[0];
+  const wh = healChar(c, Math.round(charMaxHp(c) * CONFIG.winHealPct));
+  const kh = modOf(P, 'killHeal'), kg = kh.n ? healChar(c, kh.n) : 0;
+  const msg = wh || kg ? `${wh ? `戰後休整：回復 ${wh} HP。` : ''}${kg ? `${kh.txt}：回復 ${kg} HP。` : ''}<br>` : '';
+  log(`<div class="le sys">${msg.replace('<br>', '')}戰後 ${c.ch.name} HP ${c.hp}/${charMaxHp(c)}</div>`);
+  return msg;
+}
+function endRun(won) {
+  RUN.over = true; RUN.won = won; clearSave();
+  const s = MODES[RUN.mode].summary();
+  if (RUN.mode !== 'practice') log(`<div class="le battle">${won ? '🏆 成功！' : '💀 失敗'}｜${s.text}｜${RUN.history.join(' → ')}</div>`);
+  recordRun(s.score, s.text);
+  showRunSummary(s.text);
+}
+
+// =====================================================================
+//  冒險地圖：隨機路徑（類似殺戮尖塔），不交叉
+// =====================================================================
+function genMap(mi) {
+  const M = CONFIG.mapGen, C = M.columns, S = M.steps - 1;   // S＝一般步數（不含王）
+  const has = Array.from({ length: S }, () => Array(C).fill(false));
+  const edges = Array.from({ length: S - 1 }, () => Array.from({ length: C }, () => []));
+  const nPaths = M.pathsMin + Math.floor(Math.random() * (M.pathsMax - M.pathsMin + 1));
+  const startCols = shuffle([...Array(C).keys()]);
+  for (let p = 0; p < nPaths; p++) {
+    let c = p < 2 ? startCols[p] : Math.floor(Math.random() * C);
+    for (let s = 0; s < S; s++) {
+      has[s][c] = true;
+      if (s === S - 1) break;
+      let nc = Math.max(0, Math.min(C - 1, c + Math.floor(Math.random() * 3) - 1));
+      for (let a = 0; a < C; a++) for (const b of edges[s][a]) if ((a < c && b > nc) || (a > c && b < nc)) nc = c;   // 不交叉
+      if (!edges[s][c].includes(nc)) edges[s][c].push(nc);
+      c = nc;
+    }
+  }
+  // 點的種類
+  const count = {}, nodes = [];
+  const parents = (s, c) => s === 0 ? [] : [...Array(C).keys()].filter(a => edges[s - 1][a].includes(c));
+  for (let s = 0; s < S; s++) {
+    nodes.push([]);
+    for (let c = 0; c < C; c++) {
+      if (!has[s][c]) { nodes[s].push(null); continue; }
+      let t = 'monster';
+      if (s === S - 1) t = weighted(M.beforeBoss);
+      else if (s > 0) for (let tries = 0; tries < 12; tries++) {
+        const x = weighted(M.typeWeights);
+        if (x === 'elite' && s < M.eliteFromStep - 1) continue;
+        if (x === 'heal' && s < M.healFromStep - 1) continue;
+        if ((count[x] || 0) >= (M.maxPerMap[x] ?? Infinity)) continue;
+        if (x !== 'monster' && parents(s, c).some(a => nodes[s - 1][a] && nodes[s - 1][a].t === x)) continue;   // 同類點不連續
+        t = x; break;
+      }
+      bump(count, t);
+      nodes[s].push({ t, jx: Math.random() * 18 - 9, jy: Math.random() * 10 - 5 });
+    }
+  }
+  return { mi, S, C, nodes, edges, pos: null, visited: [] };
+}
+function availNodes() {
+  const m = RUN.mapState;
+  if (!m.pos) return m.nodes[0].map((n, l) => n && { s: 0, l }).filter(Boolean);
+  if (m.pos.s === m.S - 1) return [{ s: m.S, l: -1 }];        // 王
+  if (m.pos.s >= m.S) return [];
+  return m.edges[m.pos.s][m.pos.l].map(l => ({ s: m.pos.s + 1, l }));
+}
+const nodeType = (s, l) => s >= RUN.mapState.S ? 'boss' : RUN.mapState.nodes[s][l].t;
+
+function showMap() {
+  showScreen('#mapScreen');
+  saveRun();
+  const m = RUN.mapState, mp = CONFIG.maps[m.mi];
+  $('#mapTitle').textContent = `🗺️ 地圖 ${m.mi + 1}/${CONFIG.maps.length}：${mp.name}・第 ${m.pos ? m.pos.s + 1 : 0}/${m.S + 1} 步`;
+  $('#mapParty').innerHTML = partyHTML();
+  $('#mapGear').innerHTML = gearHTML();
+
+  // SVG：上面是第 1 步，往下走，最下面是王
+  const W = 300, RH = 56, top = 28;
+  const X = (s, l) => l < 0 ? W / 2 : 42 + l * (216 / (m.C - 1)) + m.nodes[s][l].jx;
+  const Y = (s, l) => top + s * RH + (l < 0 || s >= m.S ? 0 : m.nodes[s][l].jy);
+  const H = top + m.S * RH + 34;
+  const av = availNodes(), isAv = (s, l) => av.some(a => a.s === s && a.l === l);
+  const visited = (s, l) => m.visited.some(v => v.s === s && v.l === l);
+  let svg = '';
+  const edge = (s1, l1, s2, l2) => { const used = visited(s1, l1) && visited(s2, l2);
+    return `<line x1="${X(s1, l1)}" y1="${Y(s1, l1)}" x2="${X(s2, l2)}" y2="${Y(s2, l2)}" stroke="${used ? '#f0c04a' : '#454b58'}" stroke-width="${used ? 4 : 2.5}"/>`; };
+  for (let s = 0; s < m.S - 1; s++) for (let l = 0; l < m.C; l++) m.edges[s][l].forEach(l2 => { svg += edge(s, l, s + 1, l2); });
+  for (let l = 0; l < m.C; l++) if (m.nodes[m.S - 1][l]) svg += edge(m.S - 1, l, m.S, -1);
+  const nodeSvg = (s, l, t) => {
+    const cur = m.pos && m.pos.s === s && m.pos.l === l, av1 = isAv(s, l), vis = visited(s, l);
+    const r = t === 'boss' ? 24.7 : 18;   // 原本 26 / 19，縮小 5%
+    return `<g class="node ${av1 ? 'avail' : ''}" ${av1 ? `data-node="${s},${l}"` : ''} opacity="${av1 || vis ? 1 : .5}">
+      <circle cx="${X(s, l)}" cy="${Y(s, l)}" r="${r}" fill="${cur ? '#5a4a1a' : vis ? '#2d3a2f' : '#262a33'}" stroke="${cur ? '#f0c04a' : '#555'}" stroke-width="${cur ? 3 : 1.5}"/>
+      <text x="${X(s, l)}" y="${Y(s, l) + 1}" text-anchor="middle" dominant-baseline="middle" font-size="${t === 'boss' ? 22 : 16}">${NODE_ICON[t]}</text></g>`;
+  };
+  for (let s = 0; s < m.S; s++) {
+    svg += `<text x="6" y="${top + s * RH + 4}" fill="#555" font-size="10">${s + 1}</text>`;
+    for (let l = 0; l < m.C; l++) if (m.nodes[s][l]) svg += nodeSvg(s, l, m.nodes[s][l].t);
+  }
+  svg += `<text x="6" y="${top + m.S * RH + 4}" fill="#555" font-size="10">${m.S + 1}</text>` + nodeSvg(m.S, -1, 'boss');
+  const el = $('#mapSvg'); el.setAttribute('viewBox', `0 0 ${W} ${H}`); el.innerHTML = svg;
+  if (m.pos) setTimeout(() => window.scrollTo(0, Math.max(0, el.getBoundingClientRect().top + window.scrollY + (top + m.pos.s * RH) * el.clientWidth / W - 160)), 30);
+}
+$('#mapSvg').addEventListener('click', e => {
+  const g = e.target.closest('[data-node]'); if (!g) return;
+  const [s, l] = g.dataset.node.split(',').map(Number);
+  enterNode(s, l);
+});
+function enterNode(s, l) {
+  const m = RUN.mapState;
+  m.pos = { s, l }; m.visited.push({ s, l });
+  const t = nodeType(s, l);
+  RUN.history.push(`${m.mi + 1}-${s + 1}${NODE_NAME[t]}`);
+  if (t === 'monster' || t === 'elite' || t === 'boss') {
+    const mp = CONFIG.maps[m.mi];
+    const spec = monsterSpec(t === 'boss' ? mp.boss : rand(mp.monsters), m.mi, s, t === 'elite');
+    return startBattle({ kind: t, queue: [spec], label: MODES.adventure.label() });
+  }
+  ({ heal: nodeHeal, buff: nodeBuff, swap: nodeSwap, treasure: nodeTreasure, event: nodeEvent })[t]();
+}
+
+// ---------- 地圖上非戰鬥的點 ----------
+function nodeHeal() {
+  const txt = healAll(CONFIG.healPct);
+  log(`<div class="le sys">❤️ 營火：${txt}</div>`);
+  choiceModal('❤️ 營火', `全隊回復 ${Math.round(CONFIG.healPct * 100)}% HP：${txt}`, [{ title: '繼續前進', fn: showMap }]);
 }
 function nodeBuff() {
   choiceModal('✨ 祝福', `選一個祝福，持續 ${CONFIG.buffBattles} 場戰鬥。`,
@@ -762,7 +1106,7 @@ function nodeBuff() {
 }
 function nodeTreasure() { equipChoices('🎁 寶箱', '', showMap); }
 function nodeEvent() {
-  const ev = CONFIG.events[Math.floor(Math.random() * CONFIG.events.length)];
+  const ev = rand(CONFIG.events);
   choiceModal(`❓ ${ev.title}`, ev.text, ev.options.map(o => ({ title: o.label, fn: () => applyEvent(ev.title, o.effects) })));
 }
 function applyEvent(title, e) {
@@ -771,8 +1115,8 @@ function applyEvent(title, e) {
   if (e.healPct) msgs.push('回復：' + healAll(e.healPct));
   if (e.maxHp) { bump(c.ups, 'maxHp', e.maxHp); c.hp += e.maxHp; msgs.push(`${c.ch.name} 最大 HP +${e.maxHp}`); }
   for (let i = 0; i < (e.equip || 0); i++) { const k = pickN(freeEquip(), 1)[0]; if (k) { gainEquip(k); msgs.push(`獲得裝備 ${CONFIG.equipment[k].name}（${modText(CONFIG.equipment[k].mods)}）`); } }
-  for (let i = 0; i < (e.upgrade || 0); i++) { const k = pickN(Object.keys(CONFIG.upgrades), 1)[0]; gainUpgrade(c, k); msgs.push(`${c.ch.name} 獲得提升 ${CONFIG.upgrades[k].name}（${modText(CONFIG.upgrades[k].mods)}）`); }
-  for (let i = 0; i < (e.buff || 0); i++) { const k = pickN(Object.keys(CONFIG.buffs), 1)[0]; gainBuff(k); msgs.push(`獲得祝福 ${CONFIG.buffs[k].name}（${modText(CONFIG.buffs[k].mods)}）`); }
+  for (let i = 0; i < (e.upgrade || 0); i++) { const k = rand(Object.keys(CONFIG.upgrades)); gainUpgrade(c, k); msgs.push(`${c.ch.name} 獲得提升 ${CONFIG.upgrades[k].name}（${modText(CONFIG.upgrades[k].mods)}）`); }
+  for (let i = 0; i < (e.buff || 0); i++) { const k = rand(Object.keys(CONFIG.buffs)); gainBuff(k); msgs.push(`獲得祝福 ${CONFIG.buffs[k].name}（${modText(CONFIG.buffs[k].mods)}）`); }
   log(`<div class="le sys">❓ ${title}：${msgs.join('；') || '什麼也沒發生'}</div>`);
   choiceModal('結果', msgs.join('<br>') || '什麼也沒發生。', [{ title: '繼續前進', fn: showMap }]);
 }
@@ -795,6 +1139,15 @@ function swapPickIn(ci, out) {
     fn: () => { c.battle[out]--; if (!c.battle[out]) delete c.battle[out]; bump(c.battle, k); log(`<div class="le sys">🔄 ${c.ch.name}：${def(out).name} → ${def(k).name}</div>`); showMap(); } })), noSwap);
 }
 
+// ---------- 據點（守護、王者連戰） ----------
+function showHub() {
+  showScreen('#hubScreen');
+  saveRun();
+  $('#hubParty').innerHTML = partyHTML();
+  $('#hubGear').innerHTML = gearHTML();
+  MODES[RUN.mode].hub();
+}
+
 // =====================================================================
 //  戰鬥
 // =====================================================================
@@ -805,20 +1158,17 @@ function buildPile(counts) {
   Object.entries(counts).forEach(([k, n]) => { for (let i = 0; i < n; i++) deck.push({ uid: ++uidSeq, key: k }); });
   return shuffle(deck);
 }
-function makeMonster(kind) {
-  const m = RUN.mapState, mp = CONFIG.maps[m.mi], S = CONFIG.scaling;
-  const key = kind === 'boss' ? mp.boss : mp.monsters[Math.floor(Math.random() * mp.monsters.length)];
-  const md = CONFIG.monsters[key], step = kind === 'boss' ? 0 : m.pos.s;
-  const hp = Math.round(md.hp * (1 + S.hpPerStep * step) * (kind === 'elite' ? S.eliteHp : 1));
-  const pow = mp.powBonus + Math.floor(step / S.powEverySteps) + (kind === 'elite' ? S.elitePow : 0);
+function makeMonster(spec) {
+  const md = CONFIG.monsters[spec.key];
   const src = [];
-  if (pow) src.push({ name: kind === 'elite' ? '地圖強度＋精英' : '地圖強度', mods: { powAll: pow } });
+  if (spec.pow) src.push({ name: spec.elite ? '區域強度＋精英' : '區域強度', mods: { powAll: spec.pow } });
   if (md.traits) src.push({ name: '特性', mods: { ...md.traits } });
   return {
-    idx: 1, isPlayer: false, name: '敵方', title: (kind === 'elite' ? '精英' : '') + md.name, icon: md.icon, key,
-    hp, maxHp: hp, speed: md.speed, deckCounts: { ...md.deck }, deckKeys: Object.keys(md.deck),
+    idx: 1, isPlayer: false, name: '敵方', title: (spec.elite ? '精英' : '') + md.name, icon: md.icon, key: spec.key,
+    role: spec.boss ? '王' : spec.elite ? '精英' : '怪物',
+    hp: spec.hp, maxHp: spec.hp, speed: md.speed, deckCounts: { ...md.deck }, deckKeys: Object.keys(md.deck),
     deck: buildPile(md.deck), hand: [], discard: [], slots: Array(CONFIG.slots).fill(null),
-    src, roundSrc: [], shield: 0, combo: 0, stats: newStats(), traits: md.traits || {},
+    src, roundSrc: [], shield: 0, combo: 0, stats: newStats(), traits: md.traits || {}, turnsAlive: 0,
   };
 }
 function makePlayerSide() {
@@ -841,17 +1191,30 @@ function modOf(p, key) {
   return { n, txt: t.join('、') };
 }
 
-function startBattle(kind) {
-  const P = makePlayerSide(), E = makeMonster(kind);
-  G = { kind, players: [P, E], turn: 0, phase: 'select', matchups: {}, revealed: [], slotRes: [], slotPow: [], slotGlow: [],
-        active: -1, anim: -1, flash: [], comboPop: [], supFlip: false, over: false, winner: null };
+// spec：{ kind, queue: [怪物規格…], label, guard }
+function startBattle(spec) {
+  const P = makePlayerSide(), E = makeMonster(spec.queue[0]);
+  G = { kind: spec.kind, label: spec.label, guard: !!spec.guard, queue: spec.queue.slice(1), beaten: [],
+        players: [P, E], turn: 0, phase: 'select', matchups: {}, revealed: [], slotRes: [], slotPow: [], slotGlow: [],
+        active: -1, anim: -1, flash: [], comboPop: [], supFlip: false, enter: true, over: false, winner: null };
   RUN.battles++;
-  log(`<div class="le battle">⚔ 第 ${RUN.battles} 場（地圖 ${RUN.mapState.mi + 1}・第 ${RUN.mapState.pos.s + 1} 步・${NODE_NAME[kind]}）：
-    ${P.title} HP ${P.hp}/${P.maxHp} 速度 ${P.speed} vs ${E.icon}${E.title} HP ${E.hp} 速度 ${E.speed}${E.src.length ? '｜' + E.src.map(s => `${s.name}：${modText(s.mods)}`).join('；') : ''}</div>`);
+  log(`<div class="le battle">⚔ 第 ${RUN.battles} 場（${spec.label}・${NODE_NAME[spec.kind]}）：
+    ${P.title} HP ${P.hp}/${P.maxHp} 速度 ${P.speed} vs ${E.icon}${E.title} HP ${E.hp} 速度 ${E.speed}${E.src.length ? '｜' + E.src.map(s => `${s.name}：${modText(s.mods)}`).join('；') : ''}
+    ${G.queue.length ? `｜後面還有：${G.queue.map(s => CONFIG.monsters[s.key].icon + CONFIG.monsters[s.key].name).join('、')}` : ''}</div>`);
   if (P.src.length) log(`<div class="le sys">我方加成：${P.src.map(s => `${s.name}（${modText(s.mods)}）`).join('、')}</div>`);
   if (P.supports.length) log(`<div class="le sys">輔助：${P.supports.map(s => s.name).join('、')}</div>`);
   showScreen('#gameScreen');
   newTurn();
+}
+// 守護：前一隻倒下，下一隻上場
+function spawnNext() {
+  const old = G.players[1];
+  G.beaten.push(old.title); RUN.kills++;
+  const E = makeMonster(G.queue.shift());
+  G.players[1] = E; G.enter = true;
+  const P = G.players[0], kh = Math.round(P.maxHp * CONFIG.guard.killHealPct);
+  if (G.guard && kh) { const got = healSide(P, kh); if (got) log(`<div class="le sys">打倒一隻：${P.title} 回復 ${got}（HP ${P.hp}）</div>`); }
+  log(`<div class="le battle">${old.icon}${old.title} 倒下！下一隻：${E.icon}${E.title} HP ${E.hp} 登場${G.queue.length ? `（還有 ${G.queue.length} 隻排隊）` : '（最後一隻）'}</div>`);
 }
 
 function drawTo(owner, p, n) {
@@ -873,13 +1236,15 @@ function newTurn() {
   G.slotPow = Array(CONFIG.slots).fill(null);
   G.slotGlow = Array(CONFIG.slots).fill(null).map(() => [false, false]);
   G.active = -1;
+  E.turnsAlive++;
   P.roundSrc = []; E.roundSrc = []; P.shield = 0; E.shield = 0;
-  if (E.traits.enrage && G.turn > 1) E.roundSrc.push({ name: `狂暴×${G.turn - 1}`, mods: { powAll: E.traits.enrage * (G.turn - 1) } });
+  if (E.traits.enrage && E.turnsAlive > 1) E.roundSrc.push({ name: `狂暴×${E.turnsAlive - 1}`, mods: { powAll: E.traits.enrage * (E.turnsAlive - 1) } });
   const e1 = modOf(P, 'energy1');
   P.energy = CONFIG.energyPerTurn + (G.turn === 1 ? e1.n : 0);
-  log(`<div class="le turn">— 第 ${G.turn} 回合 — 你 HP ${P.hp} ／ ${E.title} HP ${E.hp}${P.energy > CONFIG.energyPerTurn ? `｜能量 ${P.energy}（${e1.txt}）` : ''}</div>`);
+  log(`<div class="le turn">— 第 ${G.turn} 回合 — 你 HP ${P.hp} ／ ${E.title} HP ${E.hp}${P.energy > CONFIG.energyPerTurn ? `｜能量 ${P.energy}（${e1.txt}）` : ''}${G.guard ? `｜水晶 ${RUN.crystal}` : ''}</div>`);
   [P, E].forEach(p => { p.slots = Array(CONFIG.slots).fill(null); drawTo(p, p, CONFIG.handSize); });
   P.supports.forEach(s => { s.chosen = null; drawTo(P, s, CONFIG.supportHandSize); });
+  aiChoose(E);   // 敵人在回合開始就決定（同時出牌；不會看到你這回合排的牌）
   render();
 }
 
@@ -916,7 +1281,7 @@ function lockState(p) {
   return { ok: true, msg: filled < CONFIG.slots ? `手牌費用無法湊滿 ${CONFIG.slots} 張，可留空格` : '' };
 }
 
-// ---------- 怪物 AI：合法出牌中隨機，偏好有組合銜接的排序 ----------
+// ---------- 敵人 AI ----------
 function comboLinks(keys) {
   let s = 0;
   for (let i = 1; i < keys.length; i++) {
@@ -928,11 +1293,36 @@ function comboLinks(keys) {
   }
   return s;
 }
+// 對手「還沒出現過的牌」的類型分布（牌庫＋手牌＋已排的牌；看不到哪張在哪）
+function unseenTypes(p) { const d = {}; [...p.deck, ...p.hand, ...p.slots.filter(Boolean)].forEach(c => bump(d, def(c.key).type)); return d; }
 function aiChoose(p) {
-  const energy = CONFIG.energyPerTurn;
+  const energy = CONFIG.energyPerTurn, opp = G.players[1 - p.idx];
   const plays = orderedPlays(p.hand, maxPlayable(p.hand, energy), energy);
   if (!plays.length) return;
-  const w = plays.map(pl => 1 + CONFIG.ai.comboWeight * comboLinks(pl.map(c => c.key)));
+  let w;
+  if (SET.aiLevel === 'easy') w = plays.map(() => 1);
+  else if (SET.aiLevel === 'normal') w = plays.map(pl => 1 + CONFIG.ai.comboWeight * comboLinks(pl.map(c => c.key)));
+  else {
+    const A = CONFIG.ai.smart, dist = unseenTypes(opp), tot = Object.values(dist).reduce((a, b) => a + b, 0) || 1;
+    const pr = t => (dist[t] || 0) / tot;
+    const finishing = opp.hp <= A.finishHp, scared = p.hp <= p.maxHp * A.lowHp;
+    const val = k => {
+      const d = def(k);
+      let v;
+      if (d.type === 'dodge') v = (pr('attack') + (d.dodgeSkill ? pr('skill') : 0)) * (2 * d.dodgeChance - 1);
+      else {
+        const loseTo = Object.keys(TYPES).find(t => TYPES[t].beats === d.type);
+        v = pr(TYPES[d.type].beats) - pr(loseTo);
+        if (d.type !== 'defense') v = v * (0.7 + d.power / 6) + pr(d.type) * (d.power - 2) * 0.1;   // 威力高的攻擊／技巧更值得
+      }
+      if (finishing && (d.type === 'attack' || d.type === 'skill')) v += 0.25;
+      if (scared && (d.type === 'defense' || d.type === 'dodge')) v += 0.25;
+      return v;
+    };
+    const sc = plays.map(pl => pl.reduce((a, c) => a + val(c.key), 0) + A.comboValue * comboLinks(pl.map(c => c.key)));
+    const mx = Math.max(...sc);
+    w = sc.map(x => Math.exp((x - mx) / A.temperature));
+  }
   let r = Math.random() * w.reduce((a, b) => a + b, 0), pick = plays[0];
   for (let i = 0; i < plays.length; i++) { r -= w[i]; if (r <= 0) { pick = plays[i]; break; } }
   pick.forEach((c, i) => { p.slots[i] = c; p.hand.splice(p.hand.indexOf(c), 1); });
@@ -1158,10 +1548,12 @@ function resolveSlot(i, ctx) {
   G.slotRes[i] = badge;
   checkOver();
 }
+// 判斷勝負；守護模式下敵人倒下但還有排隊的，就標記換下一隻
 function checkOver() {
   const [P, E] = G.players;
   if (E.hp <= 0) {
     if (P.hp <= 0) { P.hp = 1; log(`<div class="le sys">同歸於盡的一擊！你以 1 HP 撐住了。</div>`); }
+    if (G.queue.length) { G.pendingSpawn = true; return; }
     G.over = true; G.winner = 0;
   } else if (P.hp <= 0) { G.over = true; G.winner = 1; }
 }
@@ -1183,7 +1575,7 @@ function applySupport(s) {
 
 async function reveal() {
   G.phase = 'reveal';
-  const g = G, [P, E] = G.players;
+  const g = G, P = G.players[0];
   const ctx = [newCtx(), newCtx()];
   log(`<div class="le sys">鎖定。你：${P.slots.map(c => c ? def(c.key).name : '空').join(' → ')}${P.supports.length ? `｜輔助：${P.supports.map(s => s.chosen ? sdef(s.chosen.key).name : '無').join('、')}` : ''}</div>`);
   // 輔助卡先掀開
@@ -1193,6 +1585,10 @@ async function reveal() {
     for (const s of sups) {
       await sleep(CONFIG.ui.supportDelay); if (G !== g) return;
       applySupport(s); s.glow = true; checkOver(); render(); s.glow = false;
+      if (G.pendingSpawn) {   // 輔助打倒了敵人：下一隻上場，馬上決定這回合的出牌
+        G.pendingSpawn = false; spawnNext(); aiChoose(G.players[1]); render();
+        await sleep(CONFIG.ui.supportDelay); if (G !== g) return;
+      }
       if (G.over) break;
     }
     await sleep(CONFIG.ui.supportDelay); if (G !== g) return;
@@ -1202,80 +1598,70 @@ async function reveal() {
     await sleep(CONFIG.ui.flipDelay); if (G !== g) return;
     resolveSlot(i, ctx); render();
     if (G.over) break;
+    if (G.pendingSpawn) {
+      if (i < CONFIG.slots - 1) log(`<div class="le sys">敵人倒下，本回合剩下的格子作廢。</div>`);
+      G.pendingSpawn = false;
+      await sleep(CONFIG.ui.slotDelay); if (G !== g) return;
+      G.players[1].slots.forEach(c => c && G.players[1].discard.push(c));
+      spawnNext(); render();
+      break;
+    }
     await sleep(CONFIG.ui.slotDelay); if (G !== g) return;
   }
+  const E = G.players[1];
   if (!G.over) {
     ctx.forEach((x, pi) => { if (x.armed) { eff(G.players[pi], x.armedKey, false); log(`<div class="le sys">${G.players[pi].name}的 ${def(x.armedKey).name} 效果落空（已是最後一格）</div>`); } });
     [P, E].forEach(p => { const rg = modOf(p, 'regen'); if (rg.n) { const got = healSide(p, rg.n); if (got) log(`<div class="le sys">${p.title} 回復 ${got}（${rg.txt}），HP ${p.hp}</div>`); } });
+    // 守護：排隊中的敵人攻擊水晶
+    if (G.guard && G.queue.length) {
+      const d = G.queue.length * CONFIG.guard.siegeDmg, b = RUN.crystal;
+      RUN.crystal = Math.max(0, RUN.crystal - d);
+      fxFloat('crystal', `−${b - RUN.crystal}`, 'crystal', 22);
+      log(`<div class="le siege">🔮 排隊中的 ${G.queue.length} 隻敵人攻擊水晶：${b} → ${RUN.crystal}</div>`);
+      if (RUN.crystal <= 0) { G.over = true; G.winner = 1; G.loseReason = '水晶被摧毀'; }
+    }
   }
-  [P, E].forEach(p => { p.slots.forEach(c => c && p.discard.push(c)); });
+  [P, E].forEach(p => { p.slots.forEach(c => c && p.discard.push(c)); p.slots = Array(CONFIG.slots).fill(null); });
   P.supports.forEach(s => { if (s.chosen) s.discard.push(s.chosen); });
   G.active = -1;
   if (G.over) {
     G.phase = 'over';
-    log(`<div class="le turn">${G.winner === 0 ? `擊敗 ${E.title}！` : `${P.title} 倒下了……`}（第 ${G.turn} 回合）</div>`);
+    if (G.winner === 0) G.beaten.push(E.title), RUN.kills++;
+    log(`<div class="le turn">${G.winner === 0 ? `擊敗 ${E.title}！` : G.loseReason ? `🔮 ${G.loseReason}……` : `${P.title} 倒下了……`}（第 ${G.turn} 回合）</div>`);
   } else G.phase = 'end';
   render();
 }
 
 // ---------- 戰鬥結束 ----------
 function finishBattle() {
-  const [P] = G.players;
-  const c = mainChar();
-  c.hp = P.hp;
+  const P = G.players[0];
+  mainChar().hp = P.hp;
   mergeStats(RUN.stats, P.stats);
   RUN.buffs.forEach(b => b.left--);
   RUN.buffs = RUN.buffs.filter(b => b.left > 0);
-  if (G.winner === 1) return endRun(false);
-  const kind = G.kind;
-  const kh = modOf(P, 'killHeal');
-  const wh = healChar(c, Math.round(charMaxHp(c) * CONFIG.winHealPct));
-  const kg = kh.n ? healChar(c, kh.n) : 0;
-  const healMsg = wh || kg ? `${wh ? `戰後休整：回復 ${wh} HP。` : ''}${kg ? `${kh.txt}：回復 ${kg} HP。` : ''}<br>` : '';
-  log(`<div class="le sys">${healMsg.replace('<br>', '')}戰後 ${c.ch.name} HP ${c.hp}/${charMaxHp(c)}</div>`);
-  const statsBtn = `<div class="row"><button onclick="showBattleStats()">查看本場統計</button></div>`;
-  const back = () => kind === 'boss' ? mapCleared() : showMap();
-  if (kind === 'monster') upgradeChoices('勝利！', healMsg, back, statsBtn);
-  else equipChoices(kind === 'boss' ? '👑 擊敗王！' : '💀 擊敗精英！', healMsg, back, statsBtn);
-}
-function mapCleared() {
-  if (RUN.mapState.mi >= CONFIG.maps.length - 1) return endRun(true);
-  const txt = healAll(CONFIG.mapClearHeal);
-  const pool = Object.keys(CONFIG.characters).filter(k => !RUN.party.some(c => c.key === k));
-  choiceModal('🏁 地圖完成！招募夥伴', `全隊回復 ${Math.round(CONFIG.mapClearHeal * 100)}%：${txt}<br>角色池 ${pool.length} 位中隨機抽 3 位，選 1 位加入隊伍。`,
-    pickN(pool, 3).map(k => { const ch = CONFIG.characters[k]; return { title: `${ch.name}（HP ${ch.hp}・速度 ${ch.speed}）`,
-      desc: `${ch.cards.map(cardLine).join('<br>')}<br>${ch.support.map(supLine).join('<br>')}`,
-      fn: () => { RUN.party.push(newCharState(k)); log(`<div class="le sys">${ch.name} 加入隊伍</div>`); chooseMain(); } }; }));
-}
-function chooseMain() {
-  choiceModal('選擇主角', '主角出 3 張戰鬥卡、承受傷害；其他人當輔助，每回合各出 1 張輔助卡。',
-    RUN.party.map((c, i) => ({ title: `${c.ch.name}${i === RUN.main ? '（目前主角）' : ''}`, desc: `HP ${c.hp}/${charMaxHp(c)}・速度 ${charSpeed(c)}${c.upNames.length ? '・提升：' + c.upNames.join('、') : ''}`,
-      fn: () => { RUN.main = i; RUN.mapState = genMap(RUN.mapState.mi + 1); log(`<div class="le battle">進入地圖 ${RUN.mapState.mi + 1}：${CONFIG.maps[RUN.mapState.mi].name}｜主角 ${c.ch.name}</div>`); showMap(); } })));
-}
-function endRun(won) {
-  RUN.over = true; RUN.won = won;
-  log(`<div class="le battle">${won ? '🏆 通關！' : '💀 冒險失敗'}｜${RUN.history.join(' → ')}</div>`);
-  showRunSummary();
+  MODES[RUN.mode].battleEnd(G.winner === 0);
 }
 
 // =====================================================================
 //  特效（畫面回饋）
 // =====================================================================
-function fxFloat(idx, text, cls, size) {
-  const f = $('#fighter' + idx), wrap = $('#arenaWrap');
-  if (!f || $('#gameScreen').classList.contains('hidden')) return;
-  const fr = f.getBoundingClientRect(), wr = wrap.getBoundingClientRect();
+function fxFloat(target, text, cls, size) {
+  if ($('#gameScreen').classList.contains('hidden')) return;
+  const f = target === 'crystal' ? $('#crystalIcon') : $('#fighter' + target);
+  if (!f) return;
+  const fr = f.getBoundingClientRect();
   const el = document.createElement('div');
-  el.className = `float ${cls}`; el.textContent = text; el.style.fontSize = size + 'px';
-  el.style.left = (fr.left - wr.left + fr.width / 2 + (Math.random() * 24 - 12)) + 'px';
-  el.style.top = (fr.top - wr.top + fr.height * 0.4 + (Math.random() * 30 - 15)) + 'px';
-  $('#fx').appendChild(el);
+  el.className = `float ${cls}`; el.textContent = text; el.style.fontSize = size + 'px'; el.style.position = 'fixed';
+  el.style.left = (fr.left + fr.width / 2 + (Math.random() * 24 - 12)) + 'px';
+  el.style.top = (fr.top + fr.height * (target === 'crystal' ? 0.5 : 0.4) + (Math.random() * 30 - 15)) + 'px';
+  document.body.appendChild(el);
   setTimeout(() => el.remove(), 1200);
 }
 function fxShake(dmg) {
   if (dmg < CONFIG.ui.bigHit) return;
   const w = $('#arenaWrap'); w.classList.remove('shake1', 'shake2'); void w.offsetWidth;
   w.classList.add(dmg >= CONFIG.ui.bigHit * 2 ? 'shake2' : 'shake1');
+  if (SET.vibrate && navigator.vibrate) try { navigator.vibrate(dmg >= CONFIG.ui.bigHit * 2 ? [60, 40, 90] : 50); } catch (e) {}
 }
 
 // =====================================================================
@@ -1290,16 +1676,21 @@ function hpBoxHTML(p) {
 function fighterHTML(p) {
   const combo = p.combo >= 2 ? `<div class="combo ${G.comboPop.includes(p.idx) ? 'pop' : ''}" style="font-size:${Math.min(20, 9 + p.combo * 2)}px">${p.combo} 連擊</div>` : '';
   const tr = p.isPlayer ? '' : modText(p.traits).replace(/，/g, '<br>');
-  const role = p.isPlayer ? '主角' : G.kind === 'boss' ? '王' : G.kind === 'elite' ? '精英' : '怪物';
-  return `<div id="fighter${p.idx}" class="fighter ${p.isPlayer ? 'me' : 'op'} ${G.flash.includes(p.idx) ? 'flash' : ''} ${p.hp <= 0 ? 'dead' : ''}" onclick="showFighter(${p.idx})">${combo}
-    <div class="glyph">${p.isPlayer ? p.title[0] : p.icon}</div><div class="fn">${role}</div>
+  return `<div id="fighter${p.idx}" class="fighter ${p.isPlayer ? 'me' : 'op'} ${G.flash.includes(p.idx) ? 'flash' : ''} ${p.hp <= 0 ? 'dead' : ''} ${!p.isPlayer && G.enter ? 'enter' : ''}" onclick="showFighter(${p.idx})">${combo}
+    <div class="glyph">${p.isPlayer ? p.title[0] : p.icon}</div><div class="fn">${p.isPlayer ? '主角' : p.role}</div>
     <div class="fn">${p.isPlayer ? p.title : p.title.replace('精英', '')}</div><div class="fn">速 ${p.speed}</div>${tr ? `<div class="tr">${tr}</div>` : ''}</div>`;
 }
 function render() {
   if (!G) return;
   const [me, op] = G.players;
-  $('#turnLbl').textContent = `地圖${RUN.mapState.mi + 1}・第${RUN.mapState.pos.s + 1}步・第 ${G.turn} 回合`;
-  $('#speedBtn').textContent = fast ? '速度 快' : '速度 1x';
+  $('#turnLbl').textContent = `${G.label}・第 ${G.turn} 回合`;
+  $('#speedBtn').textContent = SET.fast ? '速度 快' : '速度 1x';
+
+  // 守護：水晶與排隊的敵人
+  const gb = $('#guardBar');
+  gb.classList.toggle('hidden', !G.guard);
+  if (G.guard) gb.innerHTML = `<span id="crystalIcon">🔮</span><b>水晶 ${RUN.crystal}/${RUN.crystalMax}</b>
+    <span class="gq">${G.queue.length ? `排隊 ${G.queue.map(s => CONFIG.monsters[s.key].icon).join('')} <span class="muted" style="font-size:11px">每回合 −${G.queue.length * CONFIG.guard.siegeDmg}</span>` : '<span class="muted" style="font-size:11px">最後一隻</span>'}</span>`;
 
   let b = `<div class="colhdr" style="grid-column:1;grid-row:1"><b>我方出牌</b><br>庫 ${me.deck.length}・棄 ${me.discard.length}</div>
     ${hpBoxHTML(me)}${hpBoxHTML(op)}
@@ -1310,9 +1701,10 @@ function render() {
     const gl = G.slotGlow[i] || [false, false];
     const tag = on => on ? `<span class="ctag">組合！</span>` : '';
     let oHTML;
-    if (G.phase === 'select') oHTML = `<div class="card back">?</div>`;
-    else if (!rv) oHTML = oc ? `<div class="card back">?</div>` : `<div class="card empty">空</div>`;
-    else oHTML = oc ? cardHTML(oc.key, (G.anim === i ? 'flip ' : '') + (gl[1] ? 'glow' : ''), (pw ? `<span class="final">${pw[1]}</span>` : '') + tag(gl[1])) : `<div class="card empty">空</div>`;
+    if (!rv) {
+      const it = SET.intent && i === 0 && oc ? def(oc.key).type : null;   // 意圖預告：公開第 1 格的類型
+      oHTML = oc || G.phase === 'select' ? `<div class="card back">${it ? `<span class="intent ${TYPES[it].cls}">${TYPES[it].label}?</span>` : '?'}</div>` : `<div class="card empty">空</div>`;
+    } else oHTML = oc ? cardHTML(oc.key, (G.anim === i ? 'flip ' : '') + (gl[1] ? 'glow' : ''), (pw ? `<span class="final">${pw[1]}</span>` : '') + tag(gl[1])) : `<div class="card empty">空</div>`;
     const mHTML = mc ? cardHTML(mc.key, gl[0] ? 'glow' : '', (pw ? `<span class="final">${pw[0]}</span>` : '') + tag(gl[0])) : `<div class="card empty">${G.phase === 'select' ? `第 ${i + 1} 格` : '空'}</div>`;
     b += `<div class="slot ${act}" data-slot="${i}" style="grid-column:1;grid-row:${row}">${mHTML}</div>
       <div class="slot ${act}" style="grid-column:4;grid-row:${row}">${oHTML}</div>`;
@@ -1320,7 +1712,7 @@ function render() {
     if (res) b += `<div class="badge rowbadge ${res.cls}" style="grid-row:${row}">${res.text}</div>`;
   }
   $('#board').innerHTML = b;
-  G.anim = -1; G.flash = []; G.comboPop = [];
+  G.anim = -1; G.flash = []; G.comboPop = []; G.enter = false;
 
   // 輔助：選牌時顯示手牌，鎖定後只顯示掀開的那張
   $('#supports').innerHTML = me.supports.map((s, si) => {
@@ -1343,7 +1735,7 @@ function render() {
     btn.disabled = !ls.ok; btn.textContent = '鎖定出牌'; hint.textContent = ls.msg || '點格子中的卡可收回';
   } else if (G.phase === 'reveal') { btn.disabled = true; btn.textContent = '翻牌結算中…'; hint.textContent = ''; }
   else if (G.phase === 'end') { btn.disabled = false; btn.textContent = '下一回合 ▶'; hint.textContent = '可往下查看戰鬥紀錄'; }
-  else { btn.disabled = false; btn.textContent = G.winner === 0 ? '領取獎勵 ▶' : '查看結果'; hint.textContent = G.winner === 0 ? '勝利！' : '主角倒下了'; }
+  else { btn.disabled = false; btn.textContent = G.winner === 0 ? '繼續 ▶' : '查看結果'; hint.textContent = G.winner === 0 ? '勝利！' : (G.loseReason || '主角倒下了'); }
 }
 
 $('#hand').addEventListener('click', e => {
@@ -1371,11 +1763,11 @@ $('#actBtn').addEventListener('click', () => {
     const me = G.players[0];
     if (!lockState(me).ok) return;
     me.supports.forEach(s => { if (s.chosen) s.hand.splice(s.hand.indexOf(s.chosen), 1); });
-    aiChoose(G.players[1]); reveal();
+    reveal();
   } else if (G.phase === 'end') newTurn();
   else if (G.phase === 'over') finishBattle();
 });
-function toggleSpeed() { fast = !fast; render(); }
+function toggleSpeed() { SET.fast = !SET.fast; saveSettings(); render(); }
 
 // ---------- 資訊彈窗 ----------
 function pileHTML(cards, sup) {
@@ -1388,6 +1780,7 @@ function showPiles() {
   const [me, op] = G.players;
   openModal(`<h3>棄牌堆（公開資訊）</h3>
     <h4>${op.title} 棄牌 ${op.discard.length}・牌庫 ${op.deck.length}</h4>${pileHTML(op.discard)}
+    <h4>${op.title} 還沒出現的牌（牌庫＋手牌）</h4>${pileHTML([...op.deck, ...op.hand])}
     <h4>你（${me.title}）棄牌 ${me.discard.length}・牌庫 ${me.deck.length}</h4>${pileHTML(me.discard)}
     <h4>你的牌庫剩餘（順序未知）</h4>${pileHTML(me.deck)}
     ${me.supports.map(s => `<h4>輔助 ${s.name}：棄牌</h4>${pileHTML(s.discard, true)}`).join('')}
@@ -1396,9 +1789,10 @@ function showPiles() {
 function showFighter(idx) {
   const p = G.players[idx];
   if (p.isPlayer) return showCharInfo(RUN.main, p);
-  openModal(`<h3>${p.icon} ${p.title}</h3><div>HP ${p.hp}/${p.maxHp}・速度 ${p.speed}</div>
+  openModal(`<h3>${p.icon} ${p.title}（${p.role}）</h3><div>HP ${p.hp}/${p.maxHp}・速度 ${p.speed}</div>
     ${p.src.length ? `<h4>加成</h4><div style="font-size:12px">${p.src.map(s => `${s.name}：${modText(s.mods)}`).join('<br>')}</div>` : ''}
     <h4>牌組（${deckCount(p.deckCounts)} 張）</h4><div style="font-size:12px">${p.deckKeys.map(k => `${cardLine(k)} ×${p.deckCounts[k]}`).join('<br>')}</div>
+    <h4>還沒出現的牌</h4>${pileHTML([...p.deck, ...p.hand])}
     <div class="row"><button class="pri" onclick="closeModal()">關閉</button></div>`);
 }
 function showCharInfo(i, side) {
@@ -1419,17 +1813,17 @@ function showRunDecks() {
 function showRules() {
   const C = CONFIG;
   openModal(`<h3>規則</h3><div class="rules"><ul>
-    <li>冒險：${C.maps.length} 張地圖，每張 ${C.mapGen.steps} 步、${C.mapGen.lanes} 條路線，最後一步打王。主角 HP 歸零就失敗。</li>
-    <li>每打完一張地圖，從角色池隨機 3 位選 1 位加入，並重新決定誰當主角。</li>
-    <li>主角：手牌 ${C.handSize}，每回合 ${C.energyPerTurn} 能量，選 ${C.slots} 張排入 1～${C.slots} 格。</li>
+    <li>主角：手牌 ${C.handSize}，每回合 ${C.energyPerTurn} 能量，選 ${C.slots} 張排入 1～${C.slots} 格；雙方同時翻牌，一格一格結算。</li>
     <li>輔助：手牌 ${C.supportHandSize}，每回合各出 1 張輔助卡，在翻牌前先掀開，效果只持續本回合。</li>
     <li><span class="tA">攻擊</span> 勝 <span class="tS">技巧</span>：命中。<span class="tS">技巧</span> 勝 <span class="tD">防禦</span>：命中＋破防（對手下一格威力 −${C.breakPenalty}）。<span class="tD">防禦</span> 勝 <span class="tA">攻擊</span>：擋下，反擊 ${C.baseCounter}。</li>
     <li>攻擊對攻擊（目前：${CLASH[C.attackClash]}）。技巧對技巧比威力，平手比速度。防禦對防禦無事。</li>
     <li><span class="tG">閃避</span>不在相剋內：被攻擊（或技巧，看卡牌）時擲骰，成功完全不受傷，失敗被命中。</li>
     <li>組合條件看自己前一格：前格命中／擋下／閃避成功。第 1 格的組合永遠不成立。</li>
     <li>連擊：每次命中 +1，擋下或閃避成功維持，其他情況中斷；跨回合累積。</li>
-    <li>成長：普通戰鬥勝利 → 主角提升（三選一，永久）；精英、寶箱、王 → 裝備（三選一，全隊共用）；祝福 → 持續 ${C.buffBattles} 場。</li>
+    <li>敵人 AI（目前：${AI_LEVEL[SET.aiLevel]}）。點怪物可以看牌組和還沒出現的牌。</li>
+    <li>成長：普通戰鬥勝利 → 主角提升（永久）；精英、寶箱、王 → 裝備（全隊共用）；祝福 → 持續 ${C.buffBattles} 場。</li>
     <li>組牌：戰鬥牌組 ${C.deckSize} 張、輔助牌組 ${C.supportDeckMin}～${C.supportDeckMax} 張，都是通用卡＋角色 2 張專屬卡，每種最多 ${C.maxCopies} 張。</li></ul>
+    <h4>遊戲模式</h4><div style="font-size:12px">${Object.values(MODES).map(m => `<b>${m.icon} ${m.name}</b>：${m.desc}`).join('<br>')}</div>
     <h4>通用戰鬥卡</h4><div style="font-size:12px">${C.commonCards.map(cardLine).join('<br>')}</div>
     <h4>通用輔助卡</h4><div style="font-size:12px">${C.commonSupport.map(supLine).join('<br>')}</div>
     <h4>角色池</h4><div style="font-size:12px">${Object.values(C.characters).map(ch => `<b>${ch.name}</b> HP ${ch.hp}・速度 ${ch.speed}<br>${ch.cards.map(cardLine).join('<br>')}<br>${ch.support.map(supLine).join('<br>')}`).join('<br><br>')}</div>
@@ -1453,27 +1847,36 @@ function showBattleStats() {
   const back = $('#mbox').innerHTML, saved = CHOICES;
   const [P, E] = G.players;
   const mu = Object.entries(G.matchups).map(([k, v]) => `<tr><td>${k}</td><td>${v}</td></tr>`).join('');
-  openModal(`<h3>本場統計（${G.turn} 回合）</h3><h4>${P.title}</h4>${statsTable(P, P.stats)}<h4>${E.title}</h4>${statsTable(E, E.stats)}
+  openModal(`<h3>本場統計（${G.turn} 回合）</h3><h4>${P.title}</h4>${statsTable(P, P.stats)}
+    <h4>${E.title}${G.beaten.length > 1 ? `（本場擊敗：${G.beaten.join('、')}）` : ''}</h4>${statsTable(E, E.stats)}
     <h4>各格結算類型</h4><table><tr><th>結果</th><th>次數</th></tr>${mu}</table>
     <div class="row"><button class="pri" id="statsBack">返回</button></div>`);
   CHOICES = saved;
   $('#statsBack').onclick = () => { $('#mbox').innerHTML = back; $('#modal').scrollTop = 0; };
 }
-function showRunSummary() {
-  const s = RUN.stats;
-  openModal(`<h3>${RUN.won ? '🏆 通關！' : '💀 冒險失敗'}</h3>
-    <div style="font-size:13px;line-height:1.7">到達：地圖 ${RUN.mapState.mi + 1}・第 ${RUN.mapState.pos ? RUN.mapState.pos.s + 1 : 0} 步｜戰鬥 ${RUN.battles} 場｜最高連擊 ${RUN.maxCombo}<br>
+function showRunSummary(text) {
+  const s = RUN.stats, M = MODES[RUN.mode];
+  if (RUN.mode === 'practice') {
+    const [P, E] = G.players;
+    const mu = Object.entries(G.matchups).map(([k, v]) => `<tr><td>${k}</td><td>${v}</td></tr>`).join('');
+    return openModal(`<h3>${RUN.won ? '🏆 勝利' : '💀 落敗'}（${G.turn} 回合）</h3><h4>${P.title}</h4>${statsTable(P, P.stats)}<h4>${E.title}</h4>${statsTable(E, E.stats)}
+      <h4>各格結算類型</h4><table><tr><th>結果</th><th>次數</th></tr>${mu}</table>
+      <div class="row"><button onclick="copyLog()">複製紀錄</button><button onclick="closeModal();openSetup('practice')">換對手</button>
+      <button class="pri" onclick="closeModal();MODES.practice.start(RUN.start)">再打一次</button></div>`);
+  }
+  openModal(`<h3>${M.icon} ${M.name}：${RUN.won ? '🏆 成功！' : '💀 失敗'}</h3>
+    <div style="font-size:13px;line-height:1.7">${text}｜戰鬥 ${RUN.battles} 場・擊敗 ${RUN.kills} 隻｜最高連擊 ${RUN.maxCombo}<br>
     隊伍：${RUN.party.map((c, i) => `${c.ch.name}${i === RUN.main ? '（主角）' : ''}${c.upNames.length ? '［' + c.upNames.join('、') + '］' : ''}`).join('、')}<br>
     裝備：${RUN.equipment.map(e => CONFIG.equipment[e].name).join('、') || '無'}<br>路線：${RUN.history.join(' → ')}</div>
-    <h4>整趟冒險統計（主角出的牌）</h4>${statsTable(null, s)}
-    <div class="row"><button onclick="copyLog()">複製紀錄</button><button onclick="closeModal();toTitle()">回標題</button>
-    <button class="pri" onclick="closeModal();startRun(RUN.party[0].key)">同角色再來</button></div>`);
+    <h4>整趟統計（主角出的牌）</h4>${statsTable(null, s)}
+    <div class="row"><button onclick="copyLog()">複製紀錄</button><button onclick="closeModal();goHome()">回主頁</button>
+    <button class="pri" onclick="closeModal();MODES[RUN.mode].start(RUN.start)">同隊伍再來</button></div>`);
 }
 function copyLog() {
   let text = $('#log').innerText;
   if (RUN && RUN.over) {
     const s = RUN.stats;
-    text += '\n\n=== 冒險統計 ===\n' + Object.keys(s.use).map(k => { const e = s.eff[k]; return `${def(k).name} 用${s.use[k]} 傷${s.dmg[k] || 0}${e ? ` 觸${e.ok}/落${e.miss}` : ''}`; }).join('，') +
+    text += '\n\n=== 統計 ===\n' + Object.keys(s.use).map(k => { const e = s.eff[k]; return `${def(k).name} 用${s.use[k]} 傷${s.dmg[k] || 0}${e ? ` 觸${e.ok}/落${e.miss}` : ''}`; }).join('，') +
       `\n裝備：${RUN.equipment.map(e => CONFIG.equipment[e].name).join('、')}\n最高連擊 ${RUN.maxCombo}`;
   }
   const done = () => toast('已複製到剪貼簿');
@@ -1485,35 +1888,92 @@ function fallbackCopy(text, done) {
   try { document.execCommand('copy'); done(); } catch (e) { toast('複製失敗'); } ta.remove();
 }
 function confirmQuit() {
-  openModal(`<h3>放棄這次冒險？</h3>
+  openModal(`<h3>放棄這次${MODES[RUN.mode].name}？</h3><div style="font-size:13px">會記錄成失敗，存檔也會刪除。只是想先離開的話，按「主頁」就好，進度會保留。</div>
     <div class="row"><button onclick="closeModal()">取消</button><button class="pri" onclick="closeModal();endRun(false)">放棄</button></div>`);
 }
 
 // =====================================================================
-//  標題畫面、組牌
+//  主頁、模式設定、牌組設定、遊戲設定
 // =====================================================================
-let startPick = 'swordsman';
-function renderTitle() {
-  const keys = Object.keys(CONFIG.characters);
-  $('#pickStart').innerHTML = keys.map(k => { const ch = CONFIG.characters[k];
-    return `<button class="charopt ${startPick === k ? 'sel' : ''}" data-start="${k}"><div class="cn">${ch.name}</div><div class="cs">HP ${ch.hp}・速 ${ch.speed}</div></button>`; }).join('');
-  const ch = CONFIG.characters[startPick];
-  $('#startDetail').innerHTML = `<div class="chardetail"><b>${ch.name}</b>　HP ${ch.hp}・速度 ${ch.speed}<br>戰鬥專屬：<br>${ch.cards.map(cardLine).join('<br>')}<br>輔助專屬：<br>${ch.support.map(supLine).join('<br>')}</div>`;
-  $('#deckList').innerHTML = keys.map(k => {
+function goHome() {
+  G = null; closeModal();
+  showScreen('#homeScreen');
+  const sv = loadSave();
+  const cont = sv ? `<button class="modecard cont" onclick="resumeRun()"><span class="mi">▶️</span><span class="mt"><b>繼續：${MODES[sv.mode].name}</b>
+      <div>${sv.party.map((c, i) => CONFIG.characters[c.key].name + (i === sv.main ? '（主角）' : '')).join('、')}・${sv.mode === 'adventure' ? `地圖 ${sv.mapState.mi + 1} 第 ${sv.mapState.pos ? sv.mapState.pos.s + 1 : 0} 步` : sv.mode === 'guard' ? `第 ${sv.wave + 1} 波・水晶 ${sv.crystal}` : `第 ${sv.bossIdx + 1} 隻王`}</div></span></button>` : '';
+  $('#modeList').innerHTML = cont + Object.entries(MODES).map(([k, m]) => {
+    const r = records[k], rec = r ? m.record(r) : '';
+    return `<button class="modecard" onclick="openSetup('${k}')"><span class="mi">${m.icon}</span><span class="mt"><b>${m.name}</b><div>${m.desc}</div>${rec ? `<div class="rec">${rec}${k !== 'practice' ? `・${r.plays} 次・成功 ${r.wins}` : ''}</div>` : ''}</span></button>`;
+  }).join('');
+}
+
+// 模式設定畫面
+let setupState = { main: 'swordsman', sups: [], mon: 'wolf', elite: false };
+let setupMode = null;
+function openSetup(mode) {
+  if (MODES[mode].save && loadSave()) {
+    return openModal(`<h3>開始新的${MODES[mode].name}？</h3><div style="font-size:13px">目前有一個進行中的${MODES[loadSave().mode].name}存檔，開始新的會覆蓋它。</div>
+      <div class="row"><button onclick="closeModal()">取消</button><button class="pri" onclick="clearSave();closeModal();openSetup('${mode}')">覆蓋並開始</button></div>`);
+  }
+  setupMode = mode;
+  showScreen('#setupScreen');
+  MODES[mode].setup();
+}
+function charGrid(sel, onPick, opts = {}) {
+  return `<div class="charlist">${Object.keys(CONFIG.characters).map(k => { const ch = CONFIG.characters[k];
+    const isSup = (opts.sups || []).includes(k), dis = opts.disable && opts.disable(k);
+    return `<button class="charopt ${sel === k ? 'sel' : ''} ${isSup ? 'sel2' : ''}" ${dis ? 'disabled' : ''} onclick="${onPick}('${k}')">${isSup ? '<span class="badge2">輔助</span>' : ''}<div class="cn">${ch.name}</div><div class="cs">HP ${ch.hp}・速 ${ch.speed}</div></button>`; }).join('')}</div>`;
+}
+function charDetail(k) {
+  const ch = CONFIG.characters[k];
+  return `<div class="chardetail"><b>${ch.name}</b>　HP ${ch.hp}・速度 ${ch.speed}<br>戰鬥專屬：<br>${ch.cards.map(cardLine).join('<br>')}<br>輔助專屬：<br>${ch.support.map(supLine).join('<br>')}</div>`;
+}
+// 只選一位起始角色（冒險、守護）
+function setupPickOne(title, start) {
+  const M = MODES[setupMode];
+  $('#setupTitle').textContent = `${M.icon} ${M.name}`;
+  $('#setupBody').innerHTML = `<div class="muted" style="font-size:12px">${M.desc}</div><h2>${title}</h2>${charGrid(setupState.main, 'pickMain')}${charDetail(setupState.main)}`;
+  $('#setupStart').disabled = false; $('#setupStart').textContent = `開始${M.name}`; $('#setupStart').onclick = start;
+}
+function pickMain(k) { setupState.main = k; setupState.sups = setupState.sups.filter(s => s !== k); MODES[setupMode].setup(); }
+function pickSup(k) {
+  if (k === setupState.main) return;
+  const i = setupState.sups.indexOf(k);
+  if (i >= 0) setupState.sups.splice(i, 1); else if (setupState.sups.length < 2) setupState.sups.push(k); else return toast('最多 2 位輔助');
+  MODES[setupMode].setup();
+}
+function pickMon(k) { setupState.mon = k; MODES[setupMode].setup(); }
+function toggleElite() { setupState.elite = !setupState.elite; MODES[setupMode].setup(); }
+// 選主角＋輔助（王者連戰、練習）；練習還要選怪物
+function setupPickTeam(start, withMonster) {
+  const M = MODES[setupMode];
+  $('#setupTitle').textContent = `${M.icon} ${M.name}`;
+  let html = `<div class="muted" style="font-size:12px">${M.desc}</div>
+    <h2>主角</h2>${charGrid(setupState.main, 'pickMain')}
+    <h2>輔助（${withMonster ? '0～2' : '選 2'} 位，再點一次取消）</h2>${charGrid(null, 'pickSup', { sups: setupState.sups, disable: k => k === setupState.main })}
+    ${charDetail(setupState.main)}`;
+  if (withMonster) {
+    html += `<h2>對手</h2>${CONFIG.maps.map((mp, i) => `<div class="muted" style="font-size:12px;margin:6px 0 4px">${mp.name}（威力 +${mp.powBonus}）</div>
+      <div class="monlist">${[...mp.monsters, mp.boss].map(k => { const m = CONFIG.monsters[k];
+        return `<button class="charopt ${setupState.mon === k ? 'sel' : ''}" onclick="pickMon('${k}')"><div class="cn">${m.icon} ${m.name}</div><div class="cs">HP ${m.hp}${mp.boss === k ? '・王' : ''}</div></button>`; }).join('')}</div>`).join('')}
+      <div class="optrow" style="margin-top:8px"><button class="${setupState.elite ? 'sel' : ''}" onclick="toggleElite()">💀 精英化（HP ×${CONFIG.scaling.eliteHp}、威力 +${CONFIG.scaling.elitePow}）：${setupState.elite ? '開' : '關'}</button></div>`;
+  }
+  $('#setupBody').innerHTML = html;
+  const ok = withMonster || setupState.sups.length === 2;
+  $('#setupStart').disabled = !ok;
+  $('#setupStart').textContent = ok ? `開始${M.name}` : '請選 2 位輔助';
+  $('#setupStart').onclick = start;
+}
+
+// 牌組設定畫面
+function showDecks() {
+  showScreen('#deckScreen');
+  $('#deckList').innerHTML = Object.keys(CONFIG.characters).map(k => {
     const tag = kind => savedDecks[kind][k] && deckValid(kind, k, savedDecks[kind][k]) ? '自訂' : '預設';
     return `<div class="deckline"><b>${CONFIG.characters[k].name}</b><span class="tag">戰鬥${tag('battle')}・輔助${tag('support')}</span>
-      <button class="sbtn" data-edit="battle" data-ek="${k}">戰鬥</button><button class="sbtn" data-edit="support" data-ek="${k}">輔助</button></div>`;
+      <button class="sbtn" onclick="openDeckEditor('battle','${k}')">戰鬥</button><button class="sbtn" onclick="openDeckEditor('support','${k}')">輔助</button></div>`;
   }).join('');
-  $('#pickRules').innerHTML = `<div class="optrow"><div class="lbl">攻擊對攻擊</div>${Object.entries(CLASH).map(([k, v]) => `<button class="${CONFIG.attackClash === k ? 'sel' : ''}" data-clash="${k}">${v}</button>`).join('')}</div>`;
 }
-$('#titleScreen').addEventListener('click', e => {
-  const s = e.target.closest('[data-start]'); if (s) { startPick = s.dataset.start; return renderTitle(); }
-  const c = e.target.closest('[data-clash]'); if (c) { CONFIG.attackClash = c.dataset.clash; return renderTitle(); }
-  const ed = e.target.closest('[data-edit]'); if (ed) return openDeckEditor(ed.dataset.edit, ed.dataset.ek);
-});
-$('#startBtn').addEventListener('click', () => startRun(startPick));
-function toTitle() { G = null; RUN = null; showScreen('#titleScreen'); renderTitle(); }
-
 let edit = null;   // { kind, charKey, d }
 function openDeckEditor(kind, charKey) { edit = { kind, charKey, d: deckFor(kind, charKey) }; renderDeckEditor(); }
 function renderDeckEditor() {
@@ -1547,10 +2007,26 @@ $('#mbox').addEventListener('click', e => {
   } else if (b.dataset.dact === 'reset') { edit.d = K.def(edit.charKey); renderDeckEditor(); }
   else if (b.dataset.dact === 'clear') { edit.d = {}; renderDeckEditor(); }
   else if (b.dataset.dact === 'done' && deckValid(edit.kind, edit.charKey, edit.d)) {
-    savedDecks[edit.kind][edit.charKey] = edit.d; saveDecks(); edit = null; closeModal(); renderTitle();
+    savedDecks[edit.kind][edit.charKey] = edit.d; store('cardDuel.decks2', savedDecks); edit = null; closeModal(); showDecks();
   }
 });
-renderTitle();
+
+// 遊戲設定
+function showSettings() {
+  const row = (label, key, opts) => `<div class="optrow"><div class="lbl">${label}</div>${Object.entries(opts).map(([v, t]) =>
+    `<button class="${String(SET[key]) === v ? 'sel' : ''}" onclick="setOpt('${key}','${v}')">${t}</button>`).join('')}</div>`;
+  openModal(`<h3>⚙️ 遊戲設定</h3>
+    ${row('敵人 AI', 'aiLevel', { easy: '簡單', normal: '普通', smart: '聰明' })}
+    <div class="muted" style="font-size:11px;margin:-6px 0 10px">${AI_LEVEL[SET.aiLevel]}${SET.aiLevel === 'smart' ? '：會根據你還沒出現過的牌推算你可能出的類型，出剋制的牌；你血少時會積極進攻' : ''}</div>
+    ${row('攻擊對攻擊', 'attackClash', CLASH)}
+    ${row('怪物意圖預告（先公開敵方第 1 格的類型）', 'intent', { true: '開', false: '關' })}
+    ${row('翻牌速度', 'fast', { false: '一般', true: '快速' })}
+    ${row('大傷害時手機震動', 'vibrate', { true: '開', false: '關' })}
+    <div class="row"><button class="pri" onclick="closeModal()">完成</button></div>`);
+}
+function setOpt(key, v) { SET[key] = v === 'true' ? true : v === 'false' ? false : v; saveSettings(); showSettings(); }
+
+goHome();
 </script>
 </body>
 </html>
