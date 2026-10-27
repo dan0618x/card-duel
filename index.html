@@ -195,7 +195,8 @@ const CONFIG = {
   guard: {
     crystalHp: 30,      // 水晶 HP
     siegeDmg: 1,        // 每隻排隊中的敵人，每回合對水晶造成的傷害
-    waveHealPct: 0.25,  // 每波結束：主角回復比例
+    waveHealPct: 0.4,   // 每波結束：主角回復比例
+    killHealPct: 0.1,   // 波次中每打倒一隻：主角回復比例
     waveRepair: 4,      // 每波結束：水晶自動修復
     repairChoice: 10,   // 獎勵選「修復水晶」修多少
     recruitAfter: [3, 6],   // 打完第幾波招募夥伴
@@ -209,7 +210,9 @@ const CONFIG = {
 
   // ---------- 王者連戰 ----------
   bossRush: {
-    healBetween: 0.4,   // 每打完一隻王：全隊回復比例
+    healBetween: 0.5,   // 每打完一隻王：全隊回復比例
+    startEquip: 2,      // 開始前先選幾件裝備（每次三選一）
+    startUpgrades: 2,   // 開始前主角先選幾個提升（每次三選一）
   },
 
   // ---------- 成長：裝備（全隊共用）、角色提升、祝福 ----------
@@ -917,7 +920,15 @@ MODES.bossrush = {
   desc: '一開始就組好 3 人隊伍，連續挑戰三隻王。適合測試主角＋輔助的搭配。',
   record: r => r.bestText ? `最佳：${r.bestText}` : '',
   setup() { setupPickTeam(() => this.start([setupState.main, ...setupState.sups])); },
-  start(keys) { newRun('bossrush', keys); RUN.bossIdx = 0; showHub(); },
+  start(keys) {
+    newRun('bossrush', keys); RUN.bossIdx = 0;
+    // 沒有前面的戰鬥可以成長，開始前先拿幾件裝備、幾個提升
+    const B = CONFIG.bossRush, steps = [];
+    for (let i = 0; i < B.startEquip; i++) steps.push(equipChoices);
+    for (let i = 0; i < B.startUpgrades; i++) steps.push(upgradeChoices);
+    const run = i => i < steps.length ? steps[i](`準備 ${i + 1}/${steps.length}`, '', () => run(i + 1)) : showHub();
+    run(0);
+  },
   resume() { showHub(); },
   hub() {
     $('#hubTitle').textContent = `👑 王者連戰・${RUN.bossIdx + 1}/${CONFIG.maps.length}`;
@@ -1198,6 +1209,8 @@ function spawnNext() {
   G.beaten.push(old.title); RUN.kills++;
   const E = makeMonster(G.queue.shift());
   G.players[1] = E; G.enter = true;
+  const P = G.players[0], kh = Math.round(P.maxHp * CONFIG.guard.killHealPct);
+  if (G.guard && kh) { const got = healSide(P, kh); if (got) log(`<div class="le sys">打倒一隻：${P.title} 回復 ${got}（HP ${P.hp}）</div>`); }
   log(`<div class="le battle">${old.icon}${old.title} 倒下！下一隻：${E.icon}${E.title} HP ${E.hp} 登場${G.queue.length ? `（還有 ${G.queue.length} 隻排隊）` : '（最後一隻）'}</div>`);
 }
 
